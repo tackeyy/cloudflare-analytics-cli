@@ -1,0 +1,47 @@
+{
+  "name": "cloudflare-analytics-cli",
+  "version": "0.1.0",
+  "description": "Cloudflare Web Analytics CLI tool and library for TypeScript",
+  "type": "module",
+  "main": "dist/lib/index.js",
+  "types": "dist/lib/index.d.ts",
+  "bin": {
+    "cfa": "dist/cli/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/lib/index.d.ts",
+      "default": "./dist/lib/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "typescript": "^5.7.3",
+    "vitest": "^3.1.0"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tackeyy/cloudflare-analytics-cli.git"
+  },
+  "license": "MIT",
+  "author": "tackeyy",
+  "keywords": [
+    "cloudflare",
+    "analytics",
+    "web-analytics",
+    "cli",
+    "graphql"
+  ]
+}
