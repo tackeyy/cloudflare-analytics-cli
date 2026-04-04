@@ -29,7 +29,8 @@
     "vitest": "^3.1.0"
   },
   "files": [
-    "dist"
+    "dist/cli",
+    "dist/lib"
   ],
   "repository": {
     "type": "git",
