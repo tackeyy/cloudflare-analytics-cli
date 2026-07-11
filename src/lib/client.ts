@@ -5,6 +5,8 @@ import type {
   SummaryData,
   TimeseriesPoint,
   SiteInfo,
+  PagesProject,
+  PagesDeployment,
   Dimension,
 } from "./types.js";
 import { buildAnalyticsQuery, buildSummaryQuery } from "./queries.js";
@@ -209,6 +211,51 @@ export class CfaClient {
       "DELETE",
       `/accounts/${this.config.accountId}/rum/site_info/${siteTag}`,
     );
+  }
+
+  /** List Cloudflare Pages projects for the configured account. */
+  async listPagesProjects(): Promise<PagesProject[]> {
+    const projects = await this.rest<Array<{
+      name: string;
+      subdomain: string;
+      domains: string[];
+      production_branch: string;
+    }>>("GET", `/accounts/${this.config.accountId}/pages/projects`);
+
+    return projects.map((project) => ({
+      name: project.name,
+      subdomain: project.subdomain,
+      domains: project.domains,
+      productionBranch: project.production_branch,
+    }));
+  }
+
+  /** List recent deployments for a Cloudflare Pages project. */
+  async listPagesDeployments(projectName: string): Promise<PagesDeployment[]> {
+    const deployments = await this.rest<Array<{
+      id: string;
+      url: string;
+      environment: string;
+      created_on: string;
+      latest_stage: { name: string; status: string };
+      deployment_trigger?: {
+        metadata?: { branch?: string; commit_hash?: string };
+      };
+    }>>(
+      "GET",
+      `/accounts/${this.config.accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`,
+    );
+
+    return deployments.map((deployment) => ({
+      id: deployment.id,
+      url: deployment.url,
+      environment: deployment.environment,
+      createdOn: deployment.created_on,
+      stage: deployment.latest_stage.name,
+      status: deployment.latest_stage.status,
+      branch: deployment.deployment_trigger?.metadata?.branch,
+      commitHash: deployment.deployment_trigger?.metadata?.commit_hash,
+    }));
   }
 
   /** Test authentication by verifying the token. */

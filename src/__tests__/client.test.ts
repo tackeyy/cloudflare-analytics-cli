@@ -168,4 +168,76 @@ describe("CfaClient", () => {
       await expect(client.authTest()).rejects.toThrow("Auth test failed");
     });
   });
+
+  describe("listPagesDeployments", () => {
+    it("lists Pages projects", async () => {
+      vi.stubGlobal(
+        "fetch",
+        mockFetch({
+          success: true,
+          result: [
+            {
+              name: "kajitz-corporate",
+              subdomain: "kajitz-corporate.pages.dev",
+              domains: ["kajitz.com", "kajitz-corporate.pages.dev"],
+              production_branch: "master",
+            },
+          ],
+        }),
+      );
+
+      const client = new CfaClient(config);
+      const projects = await client.listPagesProjects();
+
+      expect(projects).toEqual([
+        {
+          name: "kajitz-corporate",
+          subdomain: "kajitz-corporate.pages.dev",
+          domains: ["kajitz.com", "kajitz-corporate.pages.dev"],
+          productionBranch: "master",
+        },
+      ]);
+    });
+
+    it("returns Pages deployment state and source metadata", async () => {
+      vi.stubGlobal(
+        "fetch",
+        mockFetch({
+          success: true,
+          result: [
+            {
+              id: "deployment-id",
+              url: "https://deployment.pages.dev",
+              environment: "production",
+              created_on: "2026-07-11T12:00:00Z",
+              latest_stage: { name: "deploy", status: "success" },
+              deployment_trigger: {
+                metadata: { branch: "master", commit_hash: "abc123" },
+              },
+            },
+          ],
+        }),
+      );
+
+      const client = new CfaClient(config);
+      const deployments = await client.listPagesDeployments("kajitz-corporate");
+
+      expect(deployments).toEqual([
+        {
+          id: "deployment-id",
+          url: "https://deployment.pages.dev",
+          environment: "production",
+          createdOn: "2026-07-11T12:00:00Z",
+          stage: "deploy",
+          status: "success",
+          branch: "master",
+          commitHash: "abc123",
+        },
+      ]);
+      expect(fetch).toHaveBeenCalledWith(
+        "https://api.cloudflare.com/client/v4/accounts/test-account/pages/projects/kajitz-corporate/deployments",
+        expect.objectContaining({ method: "GET" }),
+      );
+    });
+  });
 });

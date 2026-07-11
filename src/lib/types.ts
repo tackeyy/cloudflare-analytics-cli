@@ -59,6 +59,26 @@ export interface SiteInfo {
   created: string;
 }
 
+/** Cloudflare Pages project metadata. */
+export interface PagesProject {
+  name: string;
+  subdomain: string;
+  domains: string[];
+  productionBranch: string;
+}
+
+/** Cloudflare Pages deployment metadata. */
+export interface PagesDeployment {
+  id: string;
+  url: string;
+  environment: string;
+  createdOn: string;
+  stage: string;
+  status: string;
+  branch?: string;
+  commitHash?: string;
+}
+
 /** GraphQL response wrapper. */
 export interface GraphQLResponse<T = unknown> {
   data: T | null;
