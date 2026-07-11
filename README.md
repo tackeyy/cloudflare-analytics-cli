@@ -12,6 +12,7 @@ A command-line tool for Cloudflare Web Analytics. Query page views, visitors, re
 - **Multi-site support** — Manage multiple sites with `--site-tag`
 - **Flexible output** — Human-readable tables, JSON (`--json`), or TSV (`--plain`)
 - **Path filtering** — Filter analytics by URL path pattern
+- **Pages operations** — Inspect projects/deployments and publish static builds
 
 ## Installation
 
@@ -66,6 +67,13 @@ cfa sites
 
 # Test authentication
 cfa auth test
+
+# List Cloudflare Pages projects and recent deployments
+cfa deployments projects
+cfa deployments list --project my-project
+
+# Deploy a static build to the production branch
+cfa deployments deploy --project my-project --directory dist --branch master
 
 # JSON output (for scripting)
 cfa --json summary --from 2026-03-01 --to 2026-03-22

@@ -10,6 +10,7 @@ import { registerBrowsersCommand } from "./commands/browsers.js";
 import { registerTimeseriesCommand } from "./commands/timeseries.js";
 import { registerSitesCommand } from "./commands/sites.js";
 import { registerAuthCommand } from "./commands/auth.js";
+import { registerDeploymentsCommand } from "./commands/deployments.js";
 
 const program = new Command();
 
@@ -37,5 +38,6 @@ registerBrowsersCommand(program, getOutputMode);
 registerTimeseriesCommand(program, getOutputMode);
 registerSitesCommand(program, getOutputMode);
 registerAuthCommand(program, getOutputMode);
+registerDeploymentsCommand(program, getOutputMode);
 
 program.parse();

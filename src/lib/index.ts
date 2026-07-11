@@ -16,5 +16,7 @@ export type {
   SummaryData,
   TimeseriesPoint,
   SiteInfo,
+  PagesProject,
+  PagesDeployment,
   OutputMode,
 } from "./types.js";
