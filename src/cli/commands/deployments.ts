@@ -12,6 +12,18 @@ interface PagesDeployOptions {
   commitMessage?: string;
 }
 
+interface PagesProjectCreateOptions {
+  project: string;
+  productionBranch: string;
+  compatibilityDate: string;
+}
+
+interface PagesSecretPutOptions {
+  project: string;
+  key: string;
+  environment: "preview" | "production";
+}
+
 export function buildPagesDeployArgs(options: PagesDeployOptions): string[] {
   const args = [
     "wrangler",
@@ -29,18 +41,54 @@ export function buildPagesDeployArgs(options: PagesDeployOptions): string[] {
   return args;
 }
 
-function runPagesDeploy(options: PagesDeployOptions): Promise<void> {
+export function buildPagesProjectCreateArgs(
+  options: PagesProjectCreateOptions,
+): string[] {
+  return [
+    "wrangler",
+    "pages",
+    "project",
+    "create",
+    options.project,
+    "--production-branch",
+    options.productionBranch,
+    "--compatibility-date",
+    options.compatibilityDate,
+  ];
+}
+
+export function buildPagesSecretPutArgs(
+  options: PagesSecretPutOptions,
+): string[] {
+  return [
+    "wrangler",
+    "pages",
+    "secret",
+    "put",
+    options.key,
+    "--project-name",
+    options.project,
+    "--env",
+    options.environment,
+  ];
+}
+
+function runWrangler(args: string[], operation: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn("npx", buildPagesDeployArgs(options), {
+    const child = spawn("npx", args, {
       stdio: "inherit",
       shell: false,
     });
     child.once("error", reject);
     child.once("exit", (code) => {
       if (code === 0) resolve();
-      else reject(new Error(`Wrangler Pages deploy exited with code ${code}`));
+      else reject(new Error(`${operation} exited with code ${code}`));
     });
   });
+}
+
+function runPagesDeploy(options: PagesDeployOptions): Promise<void> {
+  return runWrangler(buildPagesDeployArgs(options), "Wrangler Pages deploy");
 }
 
 function printProjects(projects: PagesProject[], mode: OutputMode): void {
@@ -81,6 +129,57 @@ export function registerDeploymentsCommand(
   const deployments = program
     .command("deployments")
     .description("Inspect Cloudflare Pages projects and deployments");
+
+  deployments
+    .command("create")
+    .description("Create a Cloudflare Pages project")
+    .requiredOption("--project <name>", "Pages project name")
+    .option("--production-branch <name>", "Production branch", "main")
+    .option(
+      "--compatibility-date <date>",
+      "Workers compatibility date",
+      new Date().toISOString().slice(0, 10),
+    )
+    .action(async (opts) => {
+      try {
+        await runWrangler(
+          buildPagesProjectCreateArgs({
+            project: opts.project,
+            productionBranch: opts.productionBranch,
+            compatibilityDate: opts.compatibilityDate,
+          }),
+          "Wrangler Pages project create",
+        );
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      }
+    });
+
+  deployments
+    .command("secret-put")
+    .description("Create or update a Pages secret from stdin")
+    .requiredOption("--project <name>", "Pages project name")
+    .requiredOption("--key <name>", "Secret variable name")
+    .option("--environment <name>", "Pages environment", "preview")
+    .action(async (opts) => {
+      try {
+        if (!["preview", "production"].includes(opts.environment)) {
+          throw new Error("Pages environment must be preview or production");
+        }
+        await runWrangler(
+          buildPagesSecretPutArgs({
+            project: opts.project,
+            key: opts.key,
+            environment: opts.environment,
+          }),
+          "Wrangler Pages secret put",
+        );
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      }
+    });
 
   deployments
     .command("projects")
