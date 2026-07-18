@@ -7,12 +7,15 @@ const config: CfaConfig = {
   accountId: "test-account",
 };
 
-function response(result: unknown) {
+function response(
+  result: unknown,
+  resultInfo?: { page: number; per_page: number; total_pages: number },
+) {
   return {
     ok: true,
     status: 200,
     statusText: "OK",
-    json: () => Promise.resolve({ success: true, result }),
+    json: () => Promise.resolve({ success: true, result, result_info: resultInfo }),
     text: () => Promise.resolve(""),
   };
 }
@@ -69,7 +72,45 @@ describe("DNS records", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "https://api.cloudflare.com/client/v4/zones/zone-id/dns_records?type=TXT&name=_dmarc.wedgeai.co.jp",
+      "https://api.cloudflare.com/client/v4/zones/zone-id/dns_records?type=TXT&name=_dmarc.wedgeai.co.jp&per_page=100&page=1",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("reads every page and filters API results by exact type and name", async () => {
+    const matching = {
+      id: "record-id",
+      zone_id: "zone-id",
+      zone_name: "wedgeai.co.jp",
+      type: "TXT",
+      name: "wedgeai.co.jp",
+      content: "v=spf1 include:_spf.google.com ~all",
+      ttl: 1,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(response([{ id: "zone-id", name: "wedgeai.co.jp", status: "active" }]))
+      .mockResolvedValueOnce(
+        response(
+          [{ ...matching, id: "wrong-type", type: "CNAME" }],
+          { page: 1, per_page: 100, total_pages: 2 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        response([matching], { page: 2, per_page: 100, total_pages: 2 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const records = await new CfaClient(config).listDnsRecords("wedgeai.co.jp", {
+      type: "TXT",
+      name: "wedgeai.co.jp",
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].id).toBe("record-id");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "https://api.cloudflare.com/client/v4/zones/zone-id/dns_records?type=TXT&name=wedgeai.co.jp&per_page=100&page=2",
       expect.objectContaining({ method: "GET" }),
     );
   });
@@ -212,10 +253,13 @@ describe("DNS records", () => {
     });
 
     expect(updateResult.action).toBe("update");
+    expect(updateResult.previousRecord).toEqual(
+      expect.objectContaining({ id: "record-id", content: "v=DMARC1; p=none" }),
+    );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       "https://api.cloudflare.com/client/v4/zones/zone-id/dns_records/record-id",
-      expect.objectContaining({ method: "PUT", body: JSON.stringify(input) }),
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify(input) }),
     );
     expect(noopResult).toEqual(
       expect.objectContaining({ action: "noop", changed: false, dryRun: false }),

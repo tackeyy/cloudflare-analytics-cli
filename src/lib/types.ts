@@ -121,6 +121,7 @@ export interface DnsUpsertResult {
   changed: boolean;
   dryRun: boolean;
   record: DnsRecord | DnsRecordInput;
+  previousRecord?: DnsRecord;
 }
 
 /** GraphQL response wrapper. */

@@ -31,6 +31,12 @@ interface CloudflareDnsRecord {
   comment?: string;
 }
 
+interface RestResultInfo {
+  page?: number;
+  perPage?: number;
+  totalPages?: number;
+}
+
 function mapDnsRecord(record: CloudflareDnsRecord): DnsRecord {
   return {
     id: record.id,
@@ -84,11 +90,11 @@ export class CfaClient {
   }
 
   /** Execute a REST API call against Cloudflare API. */
-  async rest<T = unknown>(
+  private async restEnvelope<T = unknown>(
     method: string,
     path: string,
     body?: unknown,
-  ): Promise<T> {
+  ): Promise<{ result: T; resultInfo?: RestResultInfo }> {
     const url = `${REST_BASE}${path}`;
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.config.apiToken}`,
@@ -96,7 +102,7 @@ export class CfaClient {
     };
 
     const init: RequestInit = { method, headers };
-    if (body) {
+    if (body !== undefined) {
       init.body = JSON.stringify(body);
     }
     const res = await fetch(url, init);
@@ -106,14 +112,37 @@ export class CfaClient {
       throw new Error(`Cloudflare REST API error: HTTP ${res.status} — ${text}`);
     }
 
-    const json = (await res.json()) as { success: boolean; result: T; errors?: Array<{ message: string }> };
+    const json = (await res.json()) as {
+      success: boolean;
+      result: T;
+      result_info?: { page?: number; per_page?: number; total_pages?: number };
+      errors?: Array<{ message: string }>;
+    };
 
     if (!json.success) {
       const msgs = json.errors?.map((e) => e.message).join(", ") || "Unknown error";
       throw new Error(`Cloudflare REST API error: ${msgs}`);
     }
 
-    return json.result;
+    return {
+      result: json.result,
+      resultInfo: json.result_info
+        ? {
+            page: json.result_info.page,
+            perPage: json.result_info.per_page,
+            totalPages: json.result_info.total_pages,
+          }
+        : undefined,
+    };
+  }
+
+  /** Execute a REST API call against Cloudflare API. */
+  async rest<T = unknown>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<T> {
+    return (await this.restEnvelope<T>(method, path, body)).result;
   }
 
   /** Fetch analytics data by dimension. */
@@ -311,12 +340,31 @@ export class CfaClient {
     const params = new URLSearchParams();
     if (query.type) params.set("type", query.type.toUpperCase());
     if (query.name) params.set("name", query.name);
-    const suffix = params.size > 0 ? `?${params.toString()}` : "";
-    const records = await this.rest<CloudflareDnsRecord[]>(
-      "GET",
-      `/zones/${encodeURIComponent(zoneId)}/dns_records${suffix}`,
-    );
-    return records.map(mapDnsRecord);
+    params.set("per_page", "100");
+    const records: CloudflareDnsRecord[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      params.set("page", String(page));
+      const envelope = await this.restEnvelope<CloudflareDnsRecord[]>(
+        "GET",
+        `/zones/${encodeURIComponent(zoneId)}/dns_records?${params.toString()}`,
+      );
+      records.push(...envelope.result);
+      totalPages = envelope.resultInfo?.totalPages ?? page;
+      page += 1;
+    } while (page <= totalPages);
+
+    const expectedType = query.type?.toUpperCase();
+    const expectedName = query.name?.toLowerCase();
+    return records
+      .filter(
+        (record) =>
+          (!expectedType || record.type === expectedType) &&
+          (!expectedName || record.name.toLowerCase() === expectedName),
+      )
+      .map(mapDnsRecord);
   }
 
   /** List DNS records in a zone with optional exact type/name filters. */
@@ -391,15 +439,27 @@ export class CfaClient {
       return { action: "noop", changed: false, dryRun, record: existing };
     }
     if (dryRun) {
-      return { action: "update", changed: true, dryRun, record: normalizedInput };
+      return {
+        action: "update",
+        changed: true,
+        dryRun,
+        record: normalizedInput,
+        previousRecord: existing,
+      };
     }
 
     const updated = await this.rest<CloudflareDnsRecord>(
-      "PUT",
+      "PATCH",
       `/zones/${encodeURIComponent(zone.id)}/dns_records/${encodeURIComponent(existing.id)}`,
       normalizedInput,
     );
-    return { action: "update", changed: true, dryRun, record: mapDnsRecord(updated) };
+    return {
+      action: "update",
+      changed: true,
+      dryRun,
+      record: mapDnsRecord(updated),
+      previousRecord: existing,
+    };
   }
 
   /** Test authentication by verifying the token. */

@@ -27,7 +27,10 @@ function printUpsert(result: DnsUpsertResult, mode: OutputMode): void {
   console.log(`${result.action}${dryRun}: ${result.record.type} ${result.record.name}`);
 }
 
-function parseTtl(value: string): number {
+export function parseTtl(value: string): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error("TTL must be a positive integer; use 1 for automatic");
+  }
   const ttl = Number.parseInt(value, 10);
   if (!Number.isInteger(ttl) || ttl < 1) {
     throw new Error("TTL must be a positive integer; use 1 for automatic");
