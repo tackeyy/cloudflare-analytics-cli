@@ -73,6 +73,9 @@ cfa auth test
 cfa auth wrangler-refresh
 cfa auth test --wrangler-auth
 
+# 別アカウントのGlobal API Keyを明示して確認
+cfa auth test --global-api-key --email owner@example.com
+
 # Cloudflare Pagesのプロジェクトと最近のデプロイを確認
 cfa deployments projects
 cfa deployments list --project my-project
@@ -83,6 +86,7 @@ cfa deployments deploy --project my-project --directory dist --branch master
 # DNSレコードを確認
 cfa dns list --zone example.com --type TXT
 cfa dns list --zone example.com --type TXT --wrangler-auth
+cfa dns list --zone example.com --type TXT --global-api-key --email owner@example.com
 
 # DNSレコードの変更内容を事前確認してから反映
 cfa --json dns upsert --zone example.com --type TXT --name example.com \
@@ -94,6 +98,8 @@ cfa --json dns upsert --zone example.com --type TXT --name example.com \
 既存のTXTレコードを更新する場合は `--match-content-prefix` が必須です。同名のGoogle所有確認レコードなどを保持したまま、指定したプレフィックスのレコードだけを更新します。
 
 `--wrangler-auth` は公式の `wrangler auth token --json` を内部利用し、plaintext設定・OS keyringのどちらからでもOAuthトークンを秘密値を表示せず取得します。期限切れトークンはWranglerが自動更新します。環境変数のAPIトークンやAPIキーは子プロセスから除外し、保存済みOAuthを明示的に選択します。DNS・認証確認だけなら `CLOUDFLARE_ACCOUNT_ID` は不要です。
+
+`--global-api-key --email <address>` は環境変数 `CLOUDFLARE_API_KEY` を `X-Auth-Key` として利用します。Bearer/OAuthとは同時指定できず、秘密値は出力しません。
 
 ## コントリビューション
 

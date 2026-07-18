@@ -53,12 +53,16 @@ export function registerDnsCommand(
     .option("--type <type>", "DNS record type")
     .option("--name <name>", "Exact DNS record name")
     .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .option("--global-api-key", "Use CLOUDFLARE_API_KEY with X-Auth headers", false)
+    .option("--email <email>", "Cloudflare account email for Global API Key auth")
     .action(async (opts) => {
       try {
         const client = new CfaClient(
           loadConfig(undefined, {
             requireAccountId: false,
             wranglerAuth: opts.wranglerAuth,
+            globalApiKeyAuth: opts.globalApiKey,
+            email: opts.email,
           }),
         );
         const records = await client.listDnsRecords(opts.zone, {
@@ -87,6 +91,8 @@ export function registerDnsCommand(
     .option("--comment <text>", "Cloudflare DNS record comment")
     .option("--dry-run", "Show the planned action without writing", false)
     .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .option("--global-api-key", "Use CLOUDFLARE_API_KEY with X-Auth headers", false)
+    .option("--email <email>", "Cloudflare account email for Global API Key auth")
     .action(async (opts) => {
       try {
         const input: DnsRecordInput = {
@@ -100,6 +106,8 @@ export function registerDnsCommand(
           loadConfig(undefined, {
             requireAccountId: false,
             wranglerAuth: opts.wranglerAuth,
+            globalApiKeyAuth: opts.globalApiKey,
+            email: opts.email,
           }),
         );
         const result = await client.upsertDnsRecord(opts.zone, input, {
