@@ -1,12 +1,10 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   loadConfig,
-  loadWranglerOAuthToken,
+  parseWranglerAuthTokenOutput,
+  sanitizeWranglerOAuthEnv,
 } from "../lib/config.js";
-import { buildWranglerWhoamiArgs } from "../cli/commands/auth.js";
+import { buildWranglerAuthTokenArgs } from "../cli/commands/auth.js";
 
 const originalToken = process.env.CLOUDFLARE_API_TOKEN;
 const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -19,31 +17,31 @@ afterEach(() => {
 });
 
 describe("Wrangler OAuth authentication", () => {
-  it("reads oauth_token without exposing other Wrangler config values", () => {
-    const directory = mkdtempSync(join(tmpdir(), "cfa-wrangler-auth-"));
-    const configPath = join(directory, "default.toml");
-    writeFileSync(
-      configPath,
-      'oauth_token = "oauth-secret"\nrefresh_token = "refresh-secret"\nexpiration_time = "future"\n',
-    );
-
-    expect(loadWranglerOAuthToken(configPath)).toBe("oauth-secret");
+  it("parses only an OAuth token from Wrangler JSON output", () => {
+    expect(
+      parseWranglerAuthTokenOutput('{"type":"oauth","token":"oauth-secret"}'),
+    ).toBe("oauth-secret");
+    expect(() =>
+      parseWranglerAuthTokenOutput('{"type":"api_token","token":"api-secret"}'),
+    ).toThrow("Wrangler did not return an OAuth token");
   });
 
-  it("fails clearly when oauth_token is absent", () => {
-    const directory = mkdtempSync(join(tmpdir(), "cfa-wrangler-auth-"));
-    const configPath = join(directory, "default.toml");
-    writeFileSync(configPath, 'refresh_token = "refresh-secret"\n');
+  it("removes higher-priority Cloudflare credentials from the child environment", () => {
+    const sanitized = sanitizeWranglerOAuthEnv({
+      PATH: "/bin",
+      CLOUDFLARE_API_TOKEN: "stale-token",
+      CLOUDFLARE_API_KEY: "stale-key",
+      CLOUDFLARE_EMAIL: "user@example.com",
+      CLOUDFLARE_AUTH_USE_KEYRING: "true",
+    });
 
-    expect(() => loadWranglerOAuthToken(configPath)).toThrow(
-      "Wrangler oauth_token not found",
-    );
+    expect(sanitized).toEqual({
+      PATH: "/bin",
+      CLOUDFLARE_AUTH_USE_KEYRING: "true",
+    });
   });
 
   it("loads Wrangler OAuth without requiring an account ID for zone operations", () => {
-    const directory = mkdtempSync(join(tmpdir(), "cfa-wrangler-auth-"));
-    const configPath = join(directory, "default.toml");
-    writeFileSync(configPath, 'oauth_token = "oauth-secret"\n');
     delete process.env.CLOUDFLARE_API_TOKEN;
     delete process.env.CLOUDFLARE_ACCOUNT_ID;
 
@@ -51,12 +49,19 @@ describe("Wrangler OAuth authentication", () => {
       loadConfig(undefined, {
         requireAccountId: false,
         wranglerAuth: true,
-        wranglerConfigPath: configPath,
+        wranglerTokenLoader: () => "oauth-secret",
       }),
-    ).toEqual(expect.objectContaining({ apiToken: "oauth-secret", accountId: "" }));
+    ).toEqual(
+      expect.objectContaining({ apiToken: "oauth-secret", accountId: undefined }),
+    );
   });
 
-  it("builds the non-shell Wrangler refresh command", () => {
-    expect(buildWranglerWhoamiArgs()).toEqual(["wrangler", "whoami"]);
+  it("builds the official non-shell Wrangler token command", () => {
+    expect(buildWranglerAuthTokenArgs()).toEqual([
+      "wrangler",
+      "auth",
+      "token",
+      "--json",
+    ]);
   });
 });

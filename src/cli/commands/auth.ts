@@ -1,25 +1,10 @@
 import type { Command } from "commander";
-import { spawn } from "node:child_process";
 import { CfaClient } from "../../lib/client.js";
-import { loadConfig } from "../../lib/config.js";
+import { loadConfig, loadWranglerOAuthToken } from "../../lib/config.js";
 import type { OutputMode } from "../../lib/types.js";
 
-export function buildWranglerWhoamiArgs(): string[] {
-  return ["wrangler", "whoami"];
-}
-
-function refreshWranglerAuthentication(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("npx", buildWranglerWhoamiArgs(), {
-      stdio: "inherit",
-      shell: false,
-    });
-    child.once("error", reject);
-    child.once("exit", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`Wrangler authentication refresh exited with code ${code}`));
-    });
-  });
+export function buildWranglerAuthTokenArgs(): string[] {
+  return ["wrangler", "auth", "token", "--json"];
 }
 
 export function registerAuthCommand(
@@ -33,9 +18,10 @@ export function registerAuthCommand(
   auth
     .command("wrangler-refresh")
     .description("Refresh the local Wrangler OAuth session")
-    .action(async () => {
+    .action(() => {
       try {
-        await refreshWranglerAuthentication();
+        loadWranglerOAuthToken();
+        console.log("Wrangler OAuth session refreshed.");
       } catch (err: any) {
         console.error(`Error: ${err.message}`);
         process.exitCode = 1;

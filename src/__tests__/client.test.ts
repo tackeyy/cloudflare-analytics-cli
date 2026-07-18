@@ -23,6 +23,13 @@ describe("CfaClient", () => {
     vi.restoreAllMocks();
   });
 
+  it("rejects account operations when accountId is omitted", async () => {
+    const client = new CfaClient({ apiToken: "test-token" });
+    await expect(client.listPagesProjects()).rejects.toThrow(
+      "CLOUDFLARE_ACCOUNT_ID is required for account operations",
+    );
+  });
+
   describe("graphql", () => {
     it("sends correct headers and body", async () => {
       const fetchMock = mockFetch({

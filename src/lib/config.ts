@@ -1,34 +1,54 @@
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import type { CfaConfig } from "./types.js";
 
 export interface LoadConfigOptions {
   requireAccountId?: boolean;
   wranglerAuth?: boolean;
-  wranglerConfigPath?: string;
+  wranglerTokenLoader?: () => string;
 }
 
-/** Resolve Wrangler's macOS OAuth configuration path. */
-export function defaultWranglerConfigPath(): string {
-  return join(homedir(), "Library", "Preferences", ".wrangler", "config", "default.toml");
+/** Remove credentials that take precedence over Wrangler's stored OAuth session. */
+export function sanitizeWranglerOAuthEnv(
+  source: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const environment = { ...source };
+  delete environment.CLOUDFLARE_API_TOKEN;
+  delete environment.CLOUDFLARE_API_KEY;
+  delete environment.CLOUDFLARE_EMAIL;
+  return environment;
 }
 
-/** Read only the OAuth access token from Wrangler's local configuration. */
-export function loadWranglerOAuthToken(
-  configPath = defaultWranglerConfigPath(),
-): string {
-  let contents: string;
+/** Parse the official `wrangler auth token --json` response. */
+export function parseWranglerAuthTokenOutput(output: string): string {
+  let result: { type?: string; token?: string };
   try {
-    contents = readFileSync(configPath, "utf8");
-  } catch (error: any) {
-    throw new Error(`Unable to read Wrangler config: ${error.message}`);
+    result = JSON.parse(output) as { type?: string; token?: string };
+  } catch {
+    throw new Error("Wrangler returned invalid authentication JSON");
   }
-  const match = contents.match(/^\s*oauth_token\s*=\s*"([^"]+)"\s*$/m);
-  if (!match?.[1]) {
-    throw new Error(`Wrangler oauth_token not found in ${configPath}`);
+  if (result.type !== "oauth" || !result.token) {
+    throw new Error("Wrangler did not return an OAuth token");
   }
-  return match[1];
+  return result.token;
+}
+
+/** Retrieve and automatically refresh Wrangler's stored OAuth token. */
+export function loadWranglerOAuthToken(): string {
+  const child = spawnSync(
+    "npx",
+    ["wrangler", "auth", "token", "--json"],
+    {
+      cwd: homedir(),
+      encoding: "utf8",
+      env: sanitizeWranglerOAuthEnv(process.env),
+      shell: false,
+    },
+  );
+  if (child.error || child.status !== 0) {
+    throw new Error("Unable to retrieve Wrangler OAuth token; run `npx wrangler login`");
+  }
+  return parseWranglerAuthTokenOutput(child.stdout);
 }
 
 /** Load configuration from environment variables. */
@@ -37,7 +57,7 @@ export function loadConfig(
   options: LoadConfigOptions = {},
 ): CfaConfig {
   const apiToken = options.wranglerAuth
-    ? loadWranglerOAuthToken(options.wranglerConfigPath)
+    ? (options.wranglerTokenLoader ?? loadWranglerOAuthToken)()
     : overrides?.apiToken || process.env.CLOUDFLARE_API_TOKEN;
   const accountId = overrides?.accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
   const siteTag = overrides?.siteTag || process.env.CFA_SITE_TAG;
@@ -53,7 +73,7 @@ export function loadConfig(
     );
   }
 
-  return { apiToken, accountId: accountId ?? "", siteTag };
+  return { apiToken, accountId, siteTag };
 }
 
 /** Get today's date in YYYY-MM-DD format. */

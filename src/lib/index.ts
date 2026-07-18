@@ -2,7 +2,8 @@ export { CfaClient } from "./client.js";
 export {
   loadConfig,
   loadWranglerOAuthToken,
-  defaultWranglerConfigPath,
+  parseWranglerAuthTokenOutput,
+  sanitizeWranglerOAuthEnv,
   today,
 } from "./config.js";
 export type { LoadConfigOptions } from "./config.js";
