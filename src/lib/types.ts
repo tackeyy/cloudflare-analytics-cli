@@ -79,6 +79,50 @@ export interface PagesDeployment {
   commitHash?: string;
 }
 
+/** Cloudflare zone metadata used for DNS operations. */
+export interface CloudflareZone {
+  id: string;
+  name: string;
+  status: string;
+}
+
+/** DNS record returned by Cloudflare. */
+export interface DnsRecord {
+  id: string;
+  zoneId: string;
+  zoneName: string;
+  name: string;
+  type: string;
+  content: string;
+  ttl: number;
+  proxied?: boolean;
+  comment?: string;
+}
+
+/** Desired DNS record values. */
+export interface DnsRecordInput {
+  type: string;
+  name: string;
+  content: string;
+  ttl?: number;
+  proxied?: boolean;
+  comment?: string;
+}
+
+/** Exact-match filters for DNS records. */
+export interface DnsRecordQuery {
+  type?: string;
+  name?: string;
+}
+
+/** Result of a safe DNS upsert operation. */
+export interface DnsUpsertResult {
+  action: "create" | "update" | "noop";
+  changed: boolean;
+  dryRun: boolean;
+  record: DnsRecord | DnsRecordInput;
+}
+
 /** GraphQL response wrapper. */
 export interface GraphQLResponse<T = unknown> {
   data: T | null;

@@ -7,12 +7,43 @@ import type {
   SiteInfo,
   PagesProject,
   PagesDeployment,
+  CloudflareZone,
+  DnsRecord,
+  DnsRecordInput,
+  DnsRecordQuery,
+  DnsUpsertResult,
   Dimension,
 } from "./types.js";
 import { buildAnalyticsQuery, buildSummaryQuery } from "./queries.js";
 
 const GRAPHQL_ENDPOINT = "https://api.cloudflare.com/client/v4/graphql";
 const REST_BASE = "https://api.cloudflare.com/client/v4";
+
+interface CloudflareDnsRecord {
+  id: string;
+  zone_id: string;
+  zone_name: string;
+  name: string;
+  type: string;
+  content: string;
+  ttl: number;
+  proxied?: boolean;
+  comment?: string;
+}
+
+function mapDnsRecord(record: CloudflareDnsRecord): DnsRecord {
+  return {
+    id: record.id,
+    zoneId: record.zone_id,
+    zoneName: record.zone_name,
+    name: record.name,
+    type: record.type,
+    content: record.content,
+    ttl: record.ttl,
+    proxied: record.proxied,
+    comment: record.comment,
+  };
+}
 
 export class CfaClient {
   private config: CfaConfig;
@@ -256,6 +287,119 @@ export class CfaClient {
       branch: deployment.deployment_trigger?.metadata?.branch,
       commitHash: deployment.deployment_trigger?.metadata?.commit_hash,
     }));
+  }
+
+  /** Resolve one active zone by its exact name. */
+  async findZoneByName(zoneName: string): Promise<CloudflareZone> {
+    const query = new URLSearchParams({ name: zoneName, status: "active" });
+    const zones = await this.rest<CloudflareZone[]>("GET", `/zones?${query.toString()}`);
+    const exactMatches = zones.filter((zone) => zone.name === zoneName);
+
+    if (exactMatches.length === 0) {
+      throw new Error(`Active Cloudflare zone not found: ${zoneName}`);
+    }
+    if (exactMatches.length > 1) {
+      throw new Error(`Multiple active Cloudflare zones found: ${zoneName}`);
+    }
+    return exactMatches[0];
+  }
+
+  private async listDnsRecordsInZone(
+    zoneId: string,
+    query: DnsRecordQuery = {},
+  ): Promise<DnsRecord[]> {
+    const params = new URLSearchParams();
+    if (query.type) params.set("type", query.type.toUpperCase());
+    if (query.name) params.set("name", query.name);
+    const suffix = params.size > 0 ? `?${params.toString()}` : "";
+    const records = await this.rest<CloudflareDnsRecord[]>(
+      "GET",
+      `/zones/${encodeURIComponent(zoneId)}/dns_records${suffix}`,
+    );
+    return records.map(mapDnsRecord);
+  }
+
+  /** List DNS records in a zone with optional exact type/name filters. */
+  async listDnsRecords(
+    zoneName: string,
+    query: DnsRecordQuery = {},
+  ): Promise<DnsRecord[]> {
+    const zone = await this.findZoneByName(zoneName);
+    return this.listDnsRecordsInZone(zone.id, query);
+  }
+
+  /** Create or replace exactly one matching DNS record. */
+  async upsertDnsRecord(
+    zoneName: string,
+    input: DnsRecordInput,
+    options: { dryRun?: boolean; matchContentPrefix?: string } = {},
+  ): Promise<DnsUpsertResult> {
+    const normalizedInput: DnsRecordInput = {
+      ...input,
+      type: input.type.toUpperCase(),
+      ttl: input.ttl ?? 1,
+    };
+    const zone = await this.findZoneByName(zoneName);
+    const records = await this.listDnsRecordsInZone(zone.id, {
+      type: normalizedInput.type,
+      name: normalizedInput.name,
+    });
+
+    if (
+      normalizedInput.type === "TXT" &&
+      records.length > 0 &&
+      !options.matchContentPrefix
+    ) {
+      throw new Error(
+        `matchContentPrefix is required to update TXT records for ${normalizedInput.name}`,
+      );
+    }
+
+    const matchingRecords = options.matchContentPrefix
+      ? records.filter((record) => record.content.startsWith(options.matchContentPrefix!))
+      : records;
+
+    if (matchingRecords.length > 1) {
+      throw new Error(
+        `Multiple ${normalizedInput.type} records found for ${normalizedInput.name}; refusing to choose one`,
+      );
+    }
+
+    const existing = matchingRecords[0];
+    const dryRun = options.dryRun ?? false;
+    if (!existing) {
+      if (dryRun) {
+        return { action: "create", changed: true, dryRun, record: normalizedInput };
+      }
+      const created = await this.rest<CloudflareDnsRecord>(
+        "POST",
+        `/zones/${encodeURIComponent(zone.id)}/dns_records`,
+        normalizedInput,
+      );
+      return { action: "create", changed: true, dryRun, record: mapDnsRecord(created) };
+    }
+
+    const isIdentical =
+      existing.type === normalizedInput.type &&
+      existing.name === normalizedInput.name &&
+      existing.content === normalizedInput.content &&
+      existing.ttl === normalizedInput.ttl &&
+      (normalizedInput.proxied === undefined || existing.proxied === normalizedInput.proxied) &&
+      (normalizedInput.comment === undefined || existing.comment === normalizedInput.comment);
+
+    if (isIdentical) {
+      return { action: "noop", changed: false, dryRun, record: existing };
+    }
+    if (dryRun) {
+      return { action: "update", changed: true, dryRun, record: normalizedInput };
+    }
+
+    const updated = await this.rest<CloudflareDnsRecord>(
+      "PUT",
+      `/zones/${encodeURIComponent(zone.id)}/dns_records/${encodeURIComponent(existing.id)}`,
+      normalizedInput,
+    );
+    return { action: "update", changed: true, dryRun, record: mapDnsRecord(updated) };
   }
 
   /** Test authentication by verifying the token. */
