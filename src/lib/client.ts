@@ -55,6 +55,17 @@ export class CfaClient {
   private config: CfaConfig;
 
   constructor(config: CfaConfig) {
+    const hasBearer = Boolean(config.apiToken);
+    const hasApiKey = Boolean(config.apiKey);
+    const hasEmail = Boolean(config.email);
+    if (hasApiKey !== hasEmail) {
+      throw new Error(
+        "Global API Key authentication requires both apiKey and email",
+      );
+    }
+    if (hasBearer === (hasApiKey && hasEmail)) {
+      throw new Error("Configure exactly one Cloudflare authentication method");
+    }
     this.config = config;
   }
 

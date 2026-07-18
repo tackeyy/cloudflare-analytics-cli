@@ -73,4 +73,27 @@ describe("Global API Key authentication", () => {
       }),
     ).toThrow("Choose either Wrangler OAuth or Global API Key authentication");
   });
+
+  it("rejects mixed or incomplete credentials in direct client usage", () => {
+    expect(
+      () =>
+        new CfaClient({
+          apiToken: "bearer-token",
+          apiKey: "global-secret",
+          email: "owner@example.com",
+        }),
+    ).toThrow("Configure exactly one Cloudflare authentication method");
+    expect(() => new CfaClient({ apiKey: "global-secret" })).toThrow(
+      "Global API Key authentication requires both apiKey and email",
+    );
+  });
+
+  it("rejects an email option unless Global API Key auth is selected", () => {
+    expect(() =>
+      loadConfig(undefined, {
+        requireAccountId: false,
+        email: "owner@example.com",
+      }),
+    ).toThrow("email can only be used with Global API Key authentication");
+  });
 });

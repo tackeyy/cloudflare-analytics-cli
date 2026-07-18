@@ -63,6 +63,9 @@ export function loadConfig(
       "Choose either Wrangler OAuth or Global API Key authentication",
     );
   }
+  if (options.email && !options.globalApiKeyAuth) {
+    throw new Error("email can only be used with Global API Key authentication");
+  }
 
   const apiToken = options.globalApiKeyAuth
     ? undefined
