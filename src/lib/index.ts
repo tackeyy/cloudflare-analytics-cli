@@ -18,5 +18,10 @@ export type {
   SiteInfo,
   PagesProject,
   PagesDeployment,
+  CloudflareZone,
+  DnsRecord,
+  DnsRecordInput,
+  DnsRecordQuery,
+  DnsUpsertResult,
   OutputMode,
 } from "./types.js";

@@ -13,6 +13,7 @@ A command-line tool for Cloudflare Web Analytics. Query page views, visitors, re
 - **Flexible output** — Human-readable tables, JSON (`--json`), or TSV (`--plain`)
 - **Path filtering** — Filter analytics by URL path pattern
 - **Pages operations** — Inspect projects/deployments and publish static builds
+- **DNS operations** — List records, dry-run changes, and safely upsert exact matches
 
 ## Installation
 
@@ -30,7 +31,7 @@ export CLOUDFLARE_ACCOUNT_ID="your-account-id"
 export CFA_SITE_TAG="your-default-site-tag"  # optional
 ```
 
-Your API token needs **Account Analytics: Read** permission.
+Your API token needs **Account Analytics: Read** permission. DNS operations additionally require **Zone: Read / DNS: Edit**.
 
 ## Usage
 
@@ -75,12 +76,23 @@ cfa deployments list --project my-project
 # Deploy a static build to the production branch
 cfa deployments deploy --project my-project --directory dist --branch master
 
+# List DNS records
+cfa dns list --zone example.com --type TXT
+
+# Preview a DNS change, then apply it
+cfa --json dns upsert --zone example.com --type TXT --name example.com \
+  --content 'v=spf1 include:_spf.google.com ~all' --match-content-prefix 'v=spf1' --ttl 1 --dry-run
+cfa --json dns upsert --zone example.com --type TXT --name example.com \
+  --content 'v=spf1 include:_spf.google.com ~all' --match-content-prefix 'v=spf1' --ttl 1
+
 # JSON output (for scripting)
 cfa --json summary --from 2026-03-01 --to 2026-03-22
 
 # TSV output (for piping)
 cfa --plain pages --from 2026-03-01 --to 2026-03-22 | head -5
 ```
+
+Updating an existing TXT record requires `--match-content-prefix`. This preserves unrelated same-name records such as domain-verification TXT values.
 
 ## Global Options
 

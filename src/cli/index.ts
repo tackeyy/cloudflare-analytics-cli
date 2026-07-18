@@ -11,6 +11,7 @@ import { registerTimeseriesCommand } from "./commands/timeseries.js";
 import { registerSitesCommand } from "./commands/sites.js";
 import { registerAuthCommand } from "./commands/auth.js";
 import { registerDeploymentsCommand } from "./commands/deployments.js";
+import { registerDnsCommand } from "./commands/dns.js";
 
 const program = new Command();
 
@@ -39,5 +40,6 @@ registerTimeseriesCommand(program, getOutputMode);
 registerSitesCommand(program, getOutputMode);
 registerAuthCommand(program, getOutputMode);
 registerDeploymentsCommand(program, getOutputMode);
+registerDnsCommand(program, getOutputMode);
 
 program.parse();
