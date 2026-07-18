@@ -58,6 +58,13 @@ export class CfaClient {
     this.config = config;
   }
 
+  private requireAccountId(): string {
+    if (!this.config.accountId) {
+      throw new Error("CLOUDFLARE_ACCOUNT_ID is required for account operations");
+    }
+    return this.config.accountId;
+  }
+
   /** Execute a GraphQL query against Cloudflare API. */
   async graphql<T = unknown>(
     query: string,
@@ -151,7 +158,7 @@ export class CfaClient {
     dimensions: Dimension[],
   ): Promise<AnalyticsRow[]> {
     const { query, variables } = buildAnalyticsQuery(
-      this.config.accountId,
+      this.requireAccountId(),
       options,
       dimensions,
     );
@@ -180,7 +187,7 @@ export class CfaClient {
   /** Fetch summary data (total PV/visits + top pages/referrers/countries). */
   async getSummary(options: QueryOptions): Promise<SummaryData> {
     const { query, variables } = buildSummaryQuery(
-      this.config.accountId,
+      this.requireAccountId(),
       options,
     );
 
@@ -235,7 +242,7 @@ export class CfaClient {
         auto_install: boolean;
         created: string;
       }>;
-    }>("GET", `/accounts/${this.config.accountId}/rum/site_info/list`);
+    }>("GET", `/accounts/${this.requireAccountId()}/rum/site_info/list`);
 
     return (result.sites || []).map((s) => ({
       siteTag: s.site_tag,
@@ -252,7 +259,7 @@ export class CfaClient {
       host: string;
       auto_install: boolean;
       created: string;
-    }>("POST", `/accounts/${this.config.accountId}/rum/site_info`, {
+    }>("POST", `/accounts/${this.requireAccountId()}/rum/site_info`, {
       host,
       auto_install: autoInstall,
     });
@@ -269,7 +276,7 @@ export class CfaClient {
   async deleteSite(siteTag: string): Promise<void> {
     await this.rest(
       "DELETE",
-      `/accounts/${this.config.accountId}/rum/site_info/${siteTag}`,
+      `/accounts/${this.requireAccountId()}/rum/site_info/${siteTag}`,
     );
   }
 
@@ -280,7 +287,7 @@ export class CfaClient {
       subdomain: string;
       domains: string[];
       production_branch: string;
-    }>>("GET", `/accounts/${this.config.accountId}/pages/projects`);
+    }>>("GET", `/accounts/${this.requireAccountId()}/pages/projects`);
 
     return projects.map((project) => ({
       name: project.name,
@@ -303,7 +310,7 @@ export class CfaClient {
       };
     }>>(
       "GET",
-      `/accounts/${this.config.accountId}/pages/projects/${encodeURIComponent(projectName)}/deployments`,
+      `/accounts/${this.requireAccountId()}/pages/projects/${encodeURIComponent(projectName)}/deployments`,
     );
 
     return deployments.map((deployment) => ({

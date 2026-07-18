@@ -1,8 +1,64 @@
+import { spawnSync } from "node:child_process";
+import { homedir } from "node:os";
 import type { CfaConfig } from "./types.js";
 
+export interface LoadConfigOptions {
+  requireAccountId?: boolean;
+  wranglerAuth?: boolean;
+  wranglerTokenLoader?: () => string;
+}
+
+/** Remove credentials that take precedence over Wrangler's stored OAuth session. */
+export function sanitizeWranglerOAuthEnv(
+  source: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const environment = { ...source };
+  delete environment.CLOUDFLARE_API_TOKEN;
+  delete environment.CLOUDFLARE_API_KEY;
+  delete environment.CLOUDFLARE_EMAIL;
+  return environment;
+}
+
+/** Parse the official `wrangler auth token --json` response. */
+export function parseWranglerAuthTokenOutput(output: string): string {
+  let result: { type?: string; token?: string };
+  try {
+    result = JSON.parse(output) as { type?: string; token?: string };
+  } catch {
+    throw new Error("Wrangler returned invalid authentication JSON");
+  }
+  if (result.type !== "oauth" || !result.token) {
+    throw new Error("Wrangler did not return an OAuth token");
+  }
+  return result.token;
+}
+
+/** Retrieve and automatically refresh Wrangler's stored OAuth token. */
+export function loadWranglerOAuthToken(): string {
+  const child = spawnSync(
+    "npx",
+    ["wrangler", "auth", "token", "--json"],
+    {
+      cwd: homedir(),
+      encoding: "utf8",
+      env: sanitizeWranglerOAuthEnv(process.env),
+      shell: false,
+    },
+  );
+  if (child.error || child.status !== 0) {
+    throw new Error("Unable to retrieve Wrangler OAuth token; run `npx wrangler login`");
+  }
+  return parseWranglerAuthTokenOutput(child.stdout);
+}
+
 /** Load configuration from environment variables. */
-export function loadConfig(overrides?: Partial<CfaConfig>): CfaConfig {
-  const apiToken = overrides?.apiToken || process.env.CLOUDFLARE_API_TOKEN;
+export function loadConfig(
+  overrides?: Partial<CfaConfig>,
+  options: LoadConfigOptions = {},
+): CfaConfig {
+  const apiToken = options.wranglerAuth
+    ? (options.wranglerTokenLoader ?? loadWranglerOAuthToken)()
+    : overrides?.apiToken || process.env.CLOUDFLARE_API_TOKEN;
   const accountId = overrides?.accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
   const siteTag = overrides?.siteTag || process.env.CFA_SITE_TAG;
 
@@ -11,7 +67,7 @@ export function loadConfig(overrides?: Partial<CfaConfig>): CfaConfig {
       "CLOUDFLARE_API_TOKEN is required. Set it as an environment variable or pass it as an option.",
     );
   }
-  if (!accountId) {
+  if (!accountId && options.requireAccountId !== false) {
     throw new Error(
       "CLOUDFLARE_ACCOUNT_ID is required. Set it as an environment variable or pass it as an option.",
     );

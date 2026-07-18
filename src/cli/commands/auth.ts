@@ -1,7 +1,11 @@
 import type { Command } from "commander";
 import { CfaClient } from "../../lib/client.js";
-import { loadConfig } from "../../lib/config.js";
+import { loadConfig, loadWranglerOAuthToken } from "../../lib/config.js";
 import type { OutputMode } from "../../lib/types.js";
+
+export function buildWranglerAuthTokenArgs(): string[] {
+  return ["wrangler", "auth", "token", "--json"];
+}
 
 export function registerAuthCommand(
   program: Command,
@@ -12,11 +16,28 @@ export function registerAuthCommand(
     .description("Authentication commands");
 
   auth
+    .command("wrangler-refresh")
+    .description("Refresh the local Wrangler OAuth session")
+    .action(() => {
+      try {
+        loadWranglerOAuthToken();
+        console.log("Wrangler OAuth session refreshed.");
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
+        process.exitCode = 1;
+      }
+    });
+
+  auth
     .command("test")
     .description("Test Cloudflare API authentication")
-    .action(async () => {
+    .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .action(async (opts) => {
       try {
-        const config = loadConfig();
+        const config = loadConfig(undefined, {
+          requireAccountId: false,
+          wranglerAuth: opts.wranglerAuth,
+        });
         const client = new CfaClient(config);
         const result = await client.authTest();
         const mode = getOutputMode();
@@ -32,7 +53,7 @@ export function registerAuthCommand(
         }
       } catch (err: any) {
         console.error(`Error: ${err.message}`);
-        process.exit(1);
+        process.exitCode = 1;
       }
     });
 }

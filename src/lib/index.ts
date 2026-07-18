@@ -1,5 +1,12 @@
 export { CfaClient } from "./client.js";
-export { loadConfig, today } from "./config.js";
+export {
+  loadConfig,
+  loadWranglerOAuthToken,
+  parseWranglerAuthTokenOutput,
+  sanitizeWranglerOAuthEnv,
+  today,
+} from "./config.js";
+export type { LoadConfigOptions } from "./config.js";
 export { buildAnalyticsQuery, buildSummaryQuery } from "./queries.js";
 export {
   formatRows,

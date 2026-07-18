@@ -69,6 +69,10 @@ cfa sites
 # Test authentication
 cfa auth test
 
+# Refresh and use the local Wrangler OAuth session
+cfa auth wrangler-refresh
+cfa auth test --wrangler-auth
+
 # List Cloudflare Pages projects and recent deployments
 cfa deployments projects
 cfa deployments list --project my-project
@@ -78,6 +82,7 @@ cfa deployments deploy --project my-project --directory dist --branch master
 
 # List DNS records
 cfa dns list --zone example.com --type TXT
+cfa dns list --zone example.com --type TXT --wrangler-auth
 
 # Preview a DNS change, then apply it
 cfa --json dns upsert --zone example.com --type TXT --name example.com \
@@ -93,6 +98,8 @@ cfa --plain pages --from 2026-03-01 --to 2026-03-22 | head -5
 ```
 
 Updating an existing TXT record requires `--match-content-prefix`. This preserves unrelated same-name records such as domain-verification TXT values.
+
+`--wrangler-auth` calls the official `wrangler auth token --json` command internally, supporting both plaintext credentials and the OS keyring without printing the OAuth token. Wrangler refreshes expired tokens automatically. API-token and API-key environment variables are removed from the child process so the stored OAuth session is selected explicitly. DNS and authentication checks do not require `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Global Options
 
@@ -110,8 +117,8 @@ Updating an existing TXT record requires `--match-content-prefix`. This preserve
 
 | Variable | Required | Description |
 |----------|:--------:|-------------|
-| `CLOUDFLARE_API_TOKEN` | Yes | Cloudflare API Token |
-| `CLOUDFLARE_ACCOUNT_ID` | Yes | Cloudflare Account ID |
+| `CLOUDFLARE_API_TOKEN` | Conditional | Cloudflare API Token; omit when using `--wrangler-auth` |
+| `CLOUDFLARE_ACCOUNT_ID` | Conditional | Required for account analytics and Pages operations; not for DNS/auth checks |
 | `CFA_SITE_TAG` | No | Default site tag |
 
 ## Library Usage

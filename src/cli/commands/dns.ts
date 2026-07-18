@@ -52,9 +52,15 @@ export function registerDnsCommand(
     .requiredOption("--zone <name>", "Cloudflare zone name")
     .option("--type <type>", "DNS record type")
     .option("--name <name>", "Exact DNS record name")
+    .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
     .action(async (opts) => {
       try {
-        const client = new CfaClient(loadConfig());
+        const client = new CfaClient(
+          loadConfig(undefined, {
+            requireAccountId: false,
+            wranglerAuth: opts.wranglerAuth,
+          }),
+        );
         const records = await client.listDnsRecords(opts.zone, {
           type: opts.type,
           name: opts.name,
@@ -80,6 +86,7 @@ export function registerDnsCommand(
     .option("--ttl <seconds>", "TTL in seconds; 1 means automatic", "1")
     .option("--comment <text>", "Cloudflare DNS record comment")
     .option("--dry-run", "Show the planned action without writing", false)
+    .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
     .action(async (opts) => {
       try {
         const input: DnsRecordInput = {
@@ -89,7 +96,12 @@ export function registerDnsCommand(
           ttl: parseTtl(opts.ttl),
           comment: opts.comment,
         };
-        const client = new CfaClient(loadConfig());
+        const client = new CfaClient(
+          loadConfig(undefined, {
+            requireAccountId: false,
+            wranglerAuth: opts.wranglerAuth,
+          }),
+        );
         const result = await client.upsertDnsRecord(opts.zone, input, {
           dryRun: opts.dryRun,
           matchContentPrefix: opts.matchContentPrefix,
