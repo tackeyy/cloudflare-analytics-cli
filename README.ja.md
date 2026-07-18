@@ -69,6 +69,10 @@ cfa sites
 # 認証テスト
 cfa auth test
 
+# Wrangler OAuthセッションを更新し、その認証で確認
+cfa auth wrangler-refresh
+cfa auth test --wrangler-auth
+
 # Cloudflare Pagesのプロジェクトと最近のデプロイを確認
 cfa deployments projects
 cfa deployments list --project my-project
@@ -78,6 +82,7 @@ cfa deployments deploy --project my-project --directory dist --branch master
 
 # DNSレコードを確認
 cfa dns list --zone example.com --type TXT
+cfa dns list --zone example.com --type TXT --wrangler-auth
 
 # DNSレコードの変更内容を事前確認してから反映
 cfa --json dns upsert --zone example.com --type TXT --name example.com \
@@ -87,6 +92,8 @@ cfa --json dns upsert --zone example.com --type TXT --name example.com \
 ```
 
 既存のTXTレコードを更新する場合は `--match-content-prefix` が必須です。同名のGoogle所有確認レコードなどを保持したまま、指定したプレフィックスのレコードだけを更新します。
+
+`--wrangler-auth` はローカルの Wrangler OAuth トークンを秘密値を表示せず利用します。期限切れの場合は先に `cfa auth wrangler-refresh` を実行してください。DNS・認証確認だけなら `CLOUDFLARE_ACCOUNT_ID` は不要です。
 
 ## コントリビューション
 

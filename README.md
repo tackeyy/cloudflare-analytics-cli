@@ -69,6 +69,10 @@ cfa sites
 # Test authentication
 cfa auth test
 
+# Refresh and use the local Wrangler OAuth session
+cfa auth wrangler-refresh
+cfa auth test --wrangler-auth
+
 # List Cloudflare Pages projects and recent deployments
 cfa deployments projects
 cfa deployments list --project my-project
@@ -78,6 +82,7 @@ cfa deployments deploy --project my-project --directory dist --branch master
 
 # List DNS records
 cfa dns list --zone example.com --type TXT
+cfa dns list --zone example.com --type TXT --wrangler-auth
 
 # Preview a DNS change, then apply it
 cfa --json dns upsert --zone example.com --type TXT --name example.com \
@@ -93,6 +98,8 @@ cfa --plain pages --from 2026-03-01 --to 2026-03-22 | head -5
 ```
 
 Updating an existing TXT record requires `--match-content-prefix`. This preserves unrelated same-name records such as domain-verification TXT values.
+
+`--wrangler-auth` reads the local Wrangler OAuth token without printing it. Run `cfa auth wrangler-refresh` first when the session has expired. DNS and authentication checks do not require `CLOUDFLARE_ACCOUNT_ID`.
 
 ## Global Options
 
