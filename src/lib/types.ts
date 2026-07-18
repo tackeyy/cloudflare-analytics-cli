@@ -1,6 +1,8 @@
 /** Cloudflare Web Analytics configuration. */
 export interface CfaConfig {
-  apiToken: string;
+  apiToken?: string;
+  apiKey?: string;
+  email?: string;
   accountId?: string;
   siteTag?: string;
 }

@@ -55,6 +55,17 @@ export class CfaClient {
   private config: CfaConfig;
 
   constructor(config: CfaConfig) {
+    const hasBearer = Boolean(config.apiToken);
+    const hasApiKey = Boolean(config.apiKey);
+    const hasEmail = Boolean(config.email);
+    if (hasApiKey !== hasEmail) {
+      throw new Error(
+        "Global API Key authentication requires both apiKey and email",
+      );
+    }
+    if (hasBearer === (hasApiKey && hasEmail)) {
+      throw new Error("Configure exactly one Cloudflare authentication method");
+    }
     this.config = config;
   }
 
@@ -65,6 +76,19 @@ export class CfaClient {
     return this.config.accountId;
   }
 
+  private authHeaders(): Record<string, string> {
+    if (this.config.apiToken) {
+      return { Authorization: `Bearer ${this.config.apiToken}` };
+    }
+    if (this.config.apiKey && this.config.email) {
+      return {
+        "X-Auth-Email": this.config.email,
+        "X-Auth-Key": this.config.apiKey,
+      };
+    }
+    throw new Error("Cloudflare authentication is not configured");
+  }
+
   /** Execute a GraphQL query against Cloudflare API. */
   async graphql<T = unknown>(
     query: string,
@@ -73,7 +97,7 @@ export class CfaClient {
     const res = await fetch(GRAPHQL_ENDPOINT, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${this.config.apiToken}`,
+        ...this.authHeaders(),
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ query, variables }),
@@ -104,7 +128,7 @@ export class CfaClient {
   ): Promise<{ result: T; resultInfo?: RestResultInfo }> {
     const url = `${REST_BASE}${path}`;
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${this.config.apiToken}`,
+      ...this.authHeaders(),
       "Content-Type": "application/json",
     };
 
@@ -471,8 +495,12 @@ export class CfaClient {
 
   /** Test authentication by verifying the token. */
   async authTest(): Promise<{ id: string; status: string }> {
+    if (this.config.apiKey && this.config.email) {
+      const user = await this.rest<{ id: string }>("GET", "/user");
+      return { id: user.id, status: "active" };
+    }
     const res = await fetch(`${REST_BASE}/user/tokens/verify`, {
-      headers: { Authorization: `Bearer ${this.config.apiToken}` },
+      headers: this.authHeaders(),
     });
 
     if (!res.ok) {

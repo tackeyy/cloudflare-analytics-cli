@@ -6,6 +6,8 @@ export interface LoadConfigOptions {
   requireAccountId?: boolean;
   wranglerAuth?: boolean;
   wranglerTokenLoader?: () => string;
+  globalApiKeyAuth?: boolean;
+  email?: string;
 }
 
 /** Remove credentials that take precedence over Wrangler's stored OAuth session. */
@@ -56,13 +58,35 @@ export function loadConfig(
   overrides?: Partial<CfaConfig>,
   options: LoadConfigOptions = {},
 ): CfaConfig {
-  const apiToken = options.wranglerAuth
+  if (options.wranglerAuth && options.globalApiKeyAuth) {
+    throw new Error(
+      "Choose either Wrangler OAuth or Global API Key authentication",
+    );
+  }
+  if (options.email && !options.globalApiKeyAuth) {
+    throw new Error("email can only be used with Global API Key authentication");
+  }
+
+  const apiToken = options.globalApiKeyAuth
+    ? undefined
+    : options.wranglerAuth
     ? (options.wranglerTokenLoader ?? loadWranglerOAuthToken)()
     : overrides?.apiToken || process.env.CLOUDFLARE_API_TOKEN;
+  const apiKey = options.globalApiKeyAuth
+    ? overrides?.apiKey || process.env.CLOUDFLARE_API_KEY
+    : undefined;
+  const email = options.globalApiKeyAuth
+    ? options.email || overrides?.email || process.env.CLOUDFLARE_EMAIL
+    : undefined;
   const accountId = overrides?.accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
   const siteTag = overrides?.siteTag || process.env.CFA_SITE_TAG;
 
-  if (!apiToken) {
+  if (options.globalApiKeyAuth && (!apiKey || !email)) {
+    throw new Error(
+      "CLOUDFLARE_API_KEY and an email are required for Global API Key authentication",
+    );
+  }
+  if (!options.globalApiKeyAuth && !apiToken) {
     throw new Error(
       "CLOUDFLARE_API_TOKEN is required. Set it as an environment variable or pass it as an option.",
     );
@@ -73,7 +97,7 @@ export function loadConfig(
     );
   }
 
-  return { apiToken, accountId, siteTag };
+  return { apiToken, apiKey, email, accountId, siteTag };
 }
 
 /** Get today's date in YYYY-MM-DD format. */

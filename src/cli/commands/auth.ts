@@ -32,11 +32,15 @@ export function registerAuthCommand(
     .command("test")
     .description("Test Cloudflare API authentication")
     .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .option("--global-api-key", "Use CLOUDFLARE_API_KEY with X-Auth headers", false)
+    .option("--email <email>", "Cloudflare account email for Global API Key auth")
     .action(async (opts) => {
       try {
         const config = loadConfig(undefined, {
           requireAccountId: false,
           wranglerAuth: opts.wranglerAuth,
+          globalApiKeyAuth: opts.globalApiKey,
+          email: opts.email,
         });
         const client = new CfaClient(config);
         const result = await client.authTest();
