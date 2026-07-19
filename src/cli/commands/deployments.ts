@@ -24,6 +24,20 @@ interface PagesSecretPutOptions {
   environment: "preview" | "production";
 }
 
+interface PagesSecretListOptions {
+  project: string;
+  environment: "preview" | "production";
+}
+
+type PagesEnvironment = "preview" | "production";
+
+export function parsePagesEnvironment(value: string): PagesEnvironment {
+  if (value !== "preview" && value !== "production") {
+    throw new Error("Pages environment must be preview or production");
+  }
+  return value;
+}
+
 export function buildPagesDeployArgs(options: PagesDeployOptions): string[] {
   const args = [
     "wrangler",
@@ -66,6 +80,21 @@ export function buildPagesSecretPutArgs(
     "secret",
     "put",
     options.key,
+    "--project-name",
+    options.project,
+    "--env",
+    options.environment,
+  ];
+}
+
+export function buildPagesSecretListArgs(
+  options: PagesSecretListOptions,
+): string[] {
+  return [
+    "wrangler",
+    "pages",
+    "secret",
+    "list",
     "--project-name",
     options.project,
     "--env",
@@ -164,16 +193,33 @@ export function registerDeploymentsCommand(
     .option("--environment <name>", "Pages environment", "preview")
     .action(async (opts) => {
       try {
-        if (!["preview", "production"].includes(opts.environment)) {
-          throw new Error("Pages environment must be preview or production");
-        }
         await runWrangler(
           buildPagesSecretPutArgs({
             project: opts.project,
             key: opts.key,
-            environment: opts.environment,
+            environment: parsePagesEnvironment(opts.environment),
           }),
           "Wrangler Pages secret put",
+        );
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      }
+    });
+
+  deployments
+    .command("secret-list")
+    .description("List Pages secret variable names without values")
+    .requiredOption("--project <name>", "Pages project name")
+    .option("--environment <name>", "Pages environment", "preview")
+    .action(async (opts) => {
+      try {
+        await runWrangler(
+          buildPagesSecretListArgs({
+            project: opts.project,
+            environment: parsePagesEnvironment(opts.environment),
+          }),
+          "Wrangler Pages secret list",
         );
       } catch (err: any) {
         console.error(`Error: ${err.message}`);
