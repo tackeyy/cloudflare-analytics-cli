@@ -83,6 +83,11 @@ cfa deployments list --project my-project
 # 静的ビルドを本番ブランチへデプロイ
 cfa deployments deploy --project my-project --directory dist --branch master
 
+# Pages Secretを標準入力から登録し、暗号化済みSecret名を確認
+printf '%s' "$SECRET_VALUE" | cfa deployments secret-put \
+  --project my-project --key API_TOKEN --environment production
+cfa deployments secret-list --project my-project --environment production
+
 # DNSレコードを確認
 cfa dns list --zone example.com --type TXT
 cfa dns list --zone example.com --type TXT --wrangler-auth

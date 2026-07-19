@@ -83,6 +83,11 @@ cfa deployments list --project my-project
 # Deploy a static build to the production branch
 cfa deployments deploy --project my-project --directory dist --branch master
 
+# Store a Pages secret from stdin, then list encrypted secret names
+printf '%s' "$SECRET_VALUE" | cfa deployments secret-put \
+  --project my-project --key API_TOKEN --environment production
+cfa deployments secret-list --project my-project --environment production
+
 # List DNS records
 cfa dns list --zone example.com --type TXT
 cfa dns list --zone example.com --type TXT --wrangler-auth

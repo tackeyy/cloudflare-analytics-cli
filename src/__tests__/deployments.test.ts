@@ -1,8 +1,12 @@
+import { Command } from "commander";
 import { describe, expect, it } from "vitest";
 import {
   buildPagesDeployArgs,
   buildPagesProjectCreateArgs,
+  buildPagesSecretListArgs,
   buildPagesSecretPutArgs,
+  parsePagesEnvironment,
+  registerDeploymentsCommand,
 } from "../cli/commands/deployments.js";
 
 describe("buildPagesDeployArgs", () => {
@@ -74,5 +78,55 @@ describe("buildPagesSecretPutArgs", () => {
       "--env",
       "preview",
     ]);
+  });
+});
+
+describe("buildPagesSecretListArgs", () => {
+  it("builds a production secret list command without exposing values", () => {
+    expect(
+      buildPagesSecretListArgs({
+        project: "llm-security-preview",
+        environment: "production",
+      }),
+    ).toEqual([
+      "wrangler",
+      "pages",
+      "secret",
+      "list",
+      "--project-name",
+      "llm-security-preview",
+      "--env",
+      "production",
+    ]);
+  });
+});
+
+describe("registerDeploymentsCommand", () => {
+  it("registers secret-list with project and environment options", () => {
+    const program = new Command();
+    registerDeploymentsCommand(program, () => "human");
+
+    const deployments = program.commands.find(
+      (command) => command.name() === "deployments",
+    );
+    const secretList = deployments?.commands.find(
+      (command) => command.name() === "secret-list",
+    );
+
+    expect(secretList).toBeDefined();
+    expect(secretList?.options.map((option) => option.long)).toEqual([
+      "--project",
+      "--environment",
+    ]);
+  });
+});
+
+describe("parsePagesEnvironment", () => {
+  it("accepts Pages environments and rejects unknown names", () => {
+    expect(parsePagesEnvironment("production")).toBe("production");
+    expect(parsePagesEnvironment("preview")).toBe("preview");
+    expect(() => parsePagesEnvironment("staging")).toThrow(
+      "Pages environment must be preview or production",
+    );
   });
 });
