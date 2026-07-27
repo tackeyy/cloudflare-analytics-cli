@@ -4,18 +4,33 @@ import { loadConfig } from "../../lib/config.js";
 import { formatSites } from "../../lib/formatter.js";
 import type { OutputMode } from "../../lib/types.js";
 
+export function buildSitesConfigOptions(opts: {
+  wranglerAuth?: boolean;
+  globalApiKey?: boolean;
+  email?: string;
+}) {
+  return {
+    wranglerAuth: Boolean(opts.wranglerAuth),
+    globalApiKeyAuth: Boolean(opts.globalApiKey),
+    email: opts.email,
+  };
+}
+
 export function registerSitesCommand(
   program: Command,
   getOutputMode: () => OutputMode,
 ): void {
   const sites = program
     .command("sites")
-    .description("Manage Web Analytics sites");
+    .description("Manage Web Analytics sites")
+    .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .option("--global-api-key", "Use CLOUDFLARE_API_KEY with X-Auth headers", false)
+    .option("--email <email>", "Cloudflare account email for Global API Key auth");
 
   // Default action: list sites
   sites.action(async () => {
     try {
-      const config = loadConfig();
+      const config = loadConfig(undefined, buildSitesConfigOptions(sites.opts()));
       const client = new CfaClient(config);
       const siteList = await client.listSites();
       console.log(formatSites(siteList, getOutputMode()));
@@ -32,7 +47,7 @@ export function registerSitesCommand(
     .option("--auto-install", "Enable auto-install JS snippet")
     .action(async (opts) => {
       try {
-        const config = loadConfig();
+        const config = loadConfig(undefined, buildSitesConfigOptions(sites.opts()));
         const client = new CfaClient(config);
         const site = await client.createSite(opts.host, opts.autoInstall);
         const mode = getOutputMode();
@@ -56,7 +71,7 @@ export function registerSitesCommand(
     .requiredOption("--site-tag <tag>", "Site tag to delete")
     .action(async (opts) => {
       try {
-        const config = loadConfig();
+        const config = loadConfig(undefined, buildSitesConfigOptions(sites.opts()));
         const client = new CfaClient(config);
         await client.deleteSite(opts.siteTag);
         const mode = getOutputMode();

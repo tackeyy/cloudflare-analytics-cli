@@ -5,6 +5,7 @@ import {
   sanitizeWranglerOAuthEnv,
 } from "../lib/config.js";
 import { buildWranglerAuthTokenArgs } from "../cli/commands/auth.js";
+import { buildSitesConfigOptions } from "../cli/commands/sites.js";
 
 const originalToken = process.env.CLOUDFLARE_API_TOKEN;
 const originalAccountId = process.env.CLOUDFLARE_ACCOUNT_ID;
@@ -63,5 +64,23 @@ describe("Wrangler OAuth authentication", () => {
       "token",
       "--json",
     ]);
+  });
+
+  it("passes Wrangler OAuth selection through Web Analytics site operations", () => {
+    expect(buildSitesConfigOptions({ wranglerAuth: true })).toEqual({
+      wranglerAuth: true,
+      globalApiKeyAuth: false,
+      email: undefined,
+    });
+    expect(buildSitesConfigOptions({ wranglerAuth: false })).toEqual({
+      wranglerAuth: false,
+      globalApiKeyAuth: false,
+      email: undefined,
+    });
+    expect(buildSitesConfigOptions({ globalApiKey: true, email: "user@example.com" })).toEqual({
+      wranglerAuth: false,
+      globalApiKeyAuth: true,
+      email: "user@example.com",
+    });
   });
 });
