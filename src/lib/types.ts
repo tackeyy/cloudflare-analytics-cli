@@ -81,6 +81,19 @@ export interface PagesDeployment {
   commitHash?: string;
 }
 
+export type TurnstileWidgetMode = "managed" | "non-interactive" | "invisible";
+
+export interface TurnstileWidgetInput {
+  name: string;
+  domains: string[];
+  mode: TurnstileWidgetMode;
+}
+
+export interface TurnstileWidget extends TurnstileWidgetInput {
+  sitekey: string;
+  secret: string;
+}
+
 /** Cloudflare zone metadata used for DNS operations. */
 export interface CloudflareZone {
   id: string;

@@ -176,6 +176,43 @@ describe("CfaClient", () => {
     });
   });
 
+  describe("createTurnstileWidget", () => {
+    it("creates a managed widget for the configured account", async () => {
+      const fetchMock = mockFetch({
+        success: true,
+        result: {
+          sitekey: "public-site-key",
+          secret: "private-secret",
+          name: "CSC AI application assessment",
+          domains: ["ai-application-vulnerability-assessment.pages.dev"],
+          mode: "managed",
+        },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      const client = new CfaClient(config);
+      const widget = await client.createTurnstileWidget({
+        name: "CSC AI application assessment",
+        domains: ["ai-application-vulnerability-assessment.pages.dev"],
+        mode: "managed",
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://api.cloudflare.com/client/v4/accounts/test-account/challenges/widgets",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            name: "CSC AI application assessment",
+            domains: ["ai-application-vulnerability-assessment.pages.dev"],
+            mode: "managed",
+          }),
+        }),
+      );
+      expect(widget.sitekey).toBe("public-site-key");
+      expect(widget.secret).toBe("private-secret");
+    });
+  });
+
   describe("listPagesDeployments", () => {
     it("lists Pages projects", async () => {
       vi.stubGlobal(

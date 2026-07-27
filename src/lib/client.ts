@@ -12,6 +12,8 @@ import type {
   DnsRecordInput,
   DnsRecordQuery,
   DnsUpsertResult,
+  TurnstileWidget,
+  TurnstileWidgetInput,
   Dimension,
 } from "./types.js";
 import { buildAnalyticsQuery, buildSummaryQuery } from "./queries.js";
@@ -347,6 +349,15 @@ export class CfaClient {
       branch: deployment.deployment_trigger?.metadata?.branch,
       commitHash: deployment.deployment_trigger?.metadata?.commit_hash,
     }));
+  }
+
+  /** Create a Cloudflare Turnstile widget for the configured account. */
+  async createTurnstileWidget(input: TurnstileWidgetInput): Promise<TurnstileWidget> {
+    return this.rest<TurnstileWidget>(
+      "POST",
+      `/accounts/${this.requireAccountId()}/challenges/widgets`,
+      input,
+    );
   }
 
   /** Resolve one active zone by its exact name. */
