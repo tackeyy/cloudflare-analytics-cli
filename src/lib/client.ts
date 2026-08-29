@@ -305,7 +305,6 @@ export class CfaClient {
     );
   }
 
-  /** List Cloudflare Pages projects for the configured account. */
   /**
    * List R2 buckets in the configured account.
    *
@@ -326,6 +325,7 @@ export class CfaClient {
     }));
   }
 
+  /** List Cloudflare Pages projects for the configured account. */
   async listPagesProjects(): Promise<PagesProject[]> {
     const projects = await this.rest<Array<{
       name: string;
