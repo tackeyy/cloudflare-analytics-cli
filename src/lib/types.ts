@@ -69,6 +69,13 @@ export interface PagesProject {
   productionBranch: string;
 }
 
+/** Cloudflare R2 bucket metadata. */
+export interface R2Bucket {
+  name: string;
+  creationDate?: string;
+  location?: string;
+}
+
 /** Cloudflare Pages deployment metadata. */
 export interface PagesDeployment {
   id: string;

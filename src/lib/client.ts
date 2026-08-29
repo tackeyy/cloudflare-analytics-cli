@@ -7,6 +7,7 @@ import type {
   SiteInfo,
   PagesProject,
   PagesDeployment,
+  R2Bucket,
   CloudflareZone,
   DnsRecord,
   DnsRecordInput,
@@ -302,6 +303,26 @@ export class CfaClient {
       "DELETE",
       `/accounts/${this.requireAccountId()}/rum/site_info/${siteTag}`,
     );
+  }
+
+  /**
+   * List R2 buckets in the configured account.
+   *
+   * Requires a token with `Workers R2 Storage:Read`. A token without it fails
+   * with an HTTP error rather than an empty list, so callers can tell
+   * "no buckets" apart from "not allowed to look".
+   */
+  async listR2Buckets(): Promise<R2Bucket[]> {
+    const accountId = this.requireAccountId();
+    const response = await this.rest<{
+      buckets?: Array<{ name: string; creation_date?: string; location?: string }>;
+    }>("GET", `/accounts/${accountId}/r2/buckets`);
+
+    return (response.buckets ?? []).map((bucket) => ({
+      name: bucket.name,
+      creationDate: bucket.creation_date,
+      location: bucket.location,
+    }));
   }
 
   /** List Cloudflare Pages projects for the configured account. */
