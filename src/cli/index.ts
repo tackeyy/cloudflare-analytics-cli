@@ -12,6 +12,7 @@ import { registerSitesCommand } from "./commands/sites.js";
 import { registerAuthCommand } from "./commands/auth.js";
 import { registerDeploymentsCommand } from "./commands/deployments.js";
 import { registerDnsCommand } from "./commands/dns.js";
+import { registerR2Command } from "./commands/r2.js";
 
 const program = new Command();
 
@@ -41,5 +42,6 @@ registerSitesCommand(program, getOutputMode);
 registerAuthCommand(program, getOutputMode);
 registerDeploymentsCommand(program, getOutputMode);
 registerDnsCommand(program, getOutputMode);
+registerR2Command(program, getOutputMode);
 
 program.parse();
