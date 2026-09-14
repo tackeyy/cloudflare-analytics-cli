@@ -38,6 +38,20 @@ export function parsePagesEnvironment(value: string): PagesEnvironment {
   return value;
 }
 
+/** Parse a user-facing fail mode into the API's `fail_open` boolean. */
+export function parseFailOpenState(value: string): boolean {
+  if (value === "open") return true;
+  if (value === "closed") return false;
+  throw new Error("fail mode must be open or closed");
+}
+
+/** Describe a `fail_open` value. Missing is "unknown", never "closed". */
+export function describeFailOpen(value: boolean | undefined): "open" | "closed" | "unknown" {
+  if (value === true) return "open";
+  if (value === false) return "closed";
+  return "unknown";
+}
+
 export function buildPagesDeployArgs(options: PagesDeployOptions): string[] {
   const args = [
     "wrangler",
@@ -224,6 +238,57 @@ export function registerDeploymentsCommand(
       } catch (err: any) {
         console.error(`Error: ${err.message}`);
         process.exit(1);
+      }
+    });
+
+  deployments
+    .command("fail-open")
+    .description("Show or set a Pages project's Functions fail open / closed mode")
+    .requiredOption("--project <name>", "Pages project name")
+    .option("--environment <name>", "Pages environment", "production")
+    .option("--set <mode>", "Set the mode for production and preview together: open or closed")
+    .option("--expect <mode>", "Exit with code 2 unless the mode is open or closed as given")
+    .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .option("--global-api-key", "Use CLOUDFLARE_API_KEY with X-Auth headers", false)
+    .option("--email <email>", "Cloudflare account email for Global API Key auth")
+    .action(async (opts) => {
+      try {
+        const environment = parsePagesEnvironment(opts.environment);
+        const desired = opts.set === undefined ? undefined : parseFailOpenState(opts.set);
+        const expected = opts.expect === undefined ? undefined : parseFailOpenState(opts.expect);
+        const client = new CfaClient(
+          loadConfig(undefined, {
+            requireAccountId: true,
+            wranglerAuth: opts.wranglerAuth,
+            globalApiKeyAuth: opts.globalApiKey,
+            email: opts.email,
+          }),
+        );
+        let current: boolean | undefined;
+        if (desired !== undefined) {
+          const stored = await client.setPagesFailOpen(opts.project, desired);
+          if (stored.production !== desired || stored.preview !== desired) {
+            throw new Error(
+              `Cloudflare did not store fail mode ${describeFailOpen(desired)} (production ${describeFailOpen(stored.production)}, preview ${describeFailOpen(stored.preview)})`,
+            );
+          }
+          current = stored[environment];
+        } else {
+          current = (await client.getPagesFailOpen(opts.project))[environment];
+        }
+        const state = describeFailOpen(current);
+        if (getOutputMode() === "json") {
+          console.log(JSON.stringify({ project: opts.project, environment, mode: state }, null, 2));
+        } else {
+          console.log(`${opts.project}\t${environment}\t${state}`);
+        }
+        if (expected !== undefined && current !== expected) {
+          console.error(`Error: expected ${describeFailOpen(expected)} but was ${state}`);
+          process.exitCode = 2;
+        }
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
+        process.exitCode = 1;
       }
     });
 

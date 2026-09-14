@@ -130,3 +130,39 @@ describe("parsePagesEnvironment", () => {
     );
   });
 });
+
+describe("fail-open helpers", () => {
+  it("parses open/closed and rejects anything else", async () => {
+    const { parseFailOpenState } = await import("../cli/commands/deployments.js");
+    expect(parseFailOpenState("open")).toBe(true);
+    expect(parseFailOpenState("closed")).toBe(false);
+    for (const bad of ["", "OPEN", "true", "false", "close"]) {
+      expect(() => parseFailOpenState(bad)).toThrow("must be open or closed");
+    }
+  });
+
+  it("describes a fail_open value without treating missing as closed", async () => {
+    const { describeFailOpen } = await import("../cli/commands/deployments.js");
+    expect(describeFailOpen(false)).toBe("closed");
+    expect(describeFailOpen(true)).toBe("open");
+    expect(describeFailOpen(undefined)).toBe("unknown");
+  });
+
+  it("registers fail-open with project, environment, set, expect and auth options", () => {
+    const program = new Command();
+    registerDeploymentsCommand(program, () => "human");
+    const failOpen = program.commands
+      .find((command) => command.name() === "deployments")
+      ?.commands.find((command) => command.name() === "fail-open");
+    expect(failOpen).toBeDefined();
+    expect(failOpen?.options.map((option) => option.long)).toEqual([
+      "--project",
+      "--environment",
+      "--set",
+      "--expect",
+      "--wrangler-auth",
+      "--global-api-key",
+      "--email",
+    ]);
+  });
+});

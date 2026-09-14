@@ -342,6 +342,49 @@ export class CfaClient {
     }));
   }
 
+  /**
+   * Read `deployment_configs.<env>.fail_open` for a Pages project.
+   *
+   * A missing or non-boolean value is reported as `undefined` so that callers
+   * never mistake "not reported" for "fail closed".
+   */
+  async getPagesFailOpen(
+    projectName: string,
+  ): Promise<{ production: boolean | undefined; preview: boolean | undefined }> {
+    const project = await this.rest<{
+      deployment_configs?: Record<string, { fail_open?: unknown } | undefined>;
+    }>(
+      "GET",
+      `/accounts/${this.requireAccountId()}/pages/projects/${encodeURIComponent(projectName)}`,
+    );
+    return pickFailOpen(project);
+  }
+
+  /**
+   * Set `fail_open` for a Pages project and return the values the API stored.
+   *
+   * The API rejects different values for production and preview
+   * (error 8000066), so both environments are always set together.
+   */
+  async setPagesFailOpen(
+    projectName: string,
+    failOpen: boolean,
+  ): Promise<{ production: boolean | undefined; preview: boolean | undefined }> {
+    const project = await this.rest<{
+      deployment_configs?: Record<string, { fail_open?: unknown } | undefined>;
+    }>(
+      "PATCH",
+      `/accounts/${this.requireAccountId()}/pages/projects/${encodeURIComponent(projectName)}`,
+      {
+        deployment_configs: {
+          production: { fail_open: failOpen },
+          preview: { fail_open: failOpen },
+        },
+      },
+    );
+    return pickFailOpen(project);
+  }
+
   /** List recent deployments for a Cloudflare Pages project. */
   async listPagesDeployments(projectName: string): Promise<PagesDeployment[]> {
     const deployments = await this.rest<Array<{
@@ -535,4 +578,14 @@ export class CfaClient {
 
     return json.result;
   }
+}
+
+function pickFailOpen(project: {
+  deployment_configs?: Record<string, { fail_open?: unknown } | undefined>;
+}): { production: boolean | undefined; preview: boolean | undefined } {
+  const read = (environment: string): boolean | undefined => {
+    const value = project.deployment_configs?.[environment]?.fail_open;
+    return typeof value === "boolean" ? value : undefined;
+  };
+  return { production: read("production"), preview: read("preview") };
 }

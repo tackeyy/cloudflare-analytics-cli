@@ -247,4 +247,69 @@ describe("CfaClient", () => {
       );
     });
   });
+
+  describe("pages fail_open", () => {
+    const projectPath =
+      "https://api.cloudflare.com/client/v4/accounts/test-account/pages/projects/csc%20preview";
+
+    it("reads fail_open per environment from the project", async () => {
+      const fetchMock = mockFetch({
+        success: true,
+        result: {
+          name: "csc preview",
+          deployment_configs: {
+            production: { fail_open: false },
+            preview: { fail_open: true },
+          },
+        },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const client = new CfaClient(config);
+      await expect(client.getPagesFailOpen("csc preview")).resolves.toEqual({
+        production: false,
+        preview: true,
+      });
+      expect(fetchMock).toHaveBeenCalledWith(projectPath, expect.objectContaining({ method: "GET" }));
+    });
+
+    it("reports a missing or non-boolean fail_open as undefined", async () => {
+      vi.stubGlobal(
+        "fetch",
+        mockFetch({
+          success: true,
+          result: { deployment_configs: { production: { fail_open: "false" } } },
+        }),
+      );
+      const client = new CfaClient(config);
+      await expect(client.getPagesFailOpen("csc preview")).resolves.toEqual({
+        production: undefined,
+        preview: undefined,
+      });
+    });
+
+    it("patches production and preview together (the API rejects differing values) and returns stored values", async () => {
+      const fetchMock = mockFetch({
+        success: true,
+        result: { deployment_configs: { production: { fail_open: false }, preview: { fail_open: false } } },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const client = new CfaClient(config);
+      await expect(client.setPagesFailOpen("csc preview", false)).resolves.toEqual({
+        production: false,
+        preview: false,
+      });
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe(projectPath);
+      expect(init.method).toBe("PATCH");
+      expect(JSON.parse(init.body)).toEqual({
+        deployment_configs: { production: { fail_open: false }, preview: { fail_open: false } },
+      });
+    });
+
+    it("throws on HTTP errors instead of reporting a state", async () => {
+      vi.stubGlobal("fetch", mockFetch({}, false, 403));
+      const client = new CfaClient(config);
+      await expect(client.getPagesFailOpen("csc preview")).rejects.toThrow("HTTP 403");
+    });
+  });
 });

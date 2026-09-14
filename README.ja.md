@@ -87,6 +87,9 @@ cfa deployments deploy --project my-project --directory dist --branch master
 printf '%s' "$SECRET_VALUE" | cfa deployments secret-put \
   --project my-project --key API_TOKEN --environment production
 cfa deployments secret-list --project my-project --environment production
+# Functions の Fail open / closed を確認・設定（--set は production と preview に同時適用）
+cfa deployments fail-open --project my-project --wrangler-auth --expect closed
+cfa deployments fail-open --project my-project --wrangler-auth --set closed
 
 # DNSレコードを確認
 cfa dns list --zone example.com --type TXT

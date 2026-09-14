@@ -87,6 +87,9 @@ cfa deployments deploy --project my-project --directory dist --branch master
 printf '%s' "$SECRET_VALUE" | cfa deployments secret-put \
   --project my-project --key API_TOKEN --environment production
 cfa deployments secret-list --project my-project --environment production
+# Show or set Functions fail open / closed (set applies to production and preview together)
+cfa deployments fail-open --project my-project --wrangler-auth --expect closed
+cfa deployments fail-open --project my-project --wrangler-auth --set closed
 
 # List DNS records
 cfa dns list --zone example.com --type TXT
