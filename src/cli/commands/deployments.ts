@@ -38,6 +38,82 @@ export function parsePagesEnvironment(value: string): PagesEnvironment {
   return value;
 }
 
+/** Parse a user-facing fail mode into the API's `fail_open` boolean. */
+export function parseFailOpenState(value: string): boolean {
+  if (value === "open") return true;
+  if (value === "closed") return false;
+  throw new Error("fail mode must be open or closed");
+}
+
+/** Describe a `fail_open` value. Missing is "unknown", never "closed". */
+export function describeFailOpen(value: boolean | undefined): "open" | "closed" | "unknown" {
+  if (value === true) return "open";
+  if (value === false) return "closed";
+  return "unknown";
+}
+
+type FailOpenValues = { production: boolean | undefined; preview: boolean | undefined };
+
+export interface FailOpenClient {
+  getPagesFailOpen(project: string): Promise<FailOpenValues>;
+  setPagesFailOpen(project: string, failOpen: boolean): Promise<FailOpenValues>;
+}
+
+export interface FailOpenResult {
+  exitCode: 0 | 1 | 2;
+  modes?: { production: string; preview: string };
+  error?: string;
+}
+
+/**
+ * Show, set, or check a Pages project's fail open / closed mode.
+ *
+ * Exit codes: 0 = ok, 1 = invalid input / API error / the stored value did not
+ * match `--set`, 2 = `--expect` did not match in production or preview
+ * (a missing value never counts as a match).
+ */
+export async function runFailOpen(
+  client: FailOpenClient,
+  options: { project: string; set?: string; expect?: string },
+): Promise<FailOpenResult> {
+  try {
+    const desired = options.set === undefined ? undefined : parseFailOpenState(options.set);
+    const expected = options.expect === undefined ? undefined : parseFailOpenState(options.expect);
+    const both = (values: FailOpenValues, mode: boolean) =>
+      values.production === mode && values.preview === mode;
+
+    if (desired !== undefined) {
+      const stored = await client.setPagesFailOpen(options.project, desired);
+      if (!both(stored, desired)) {
+        return {
+          exitCode: 1,
+          modes: describeBoth(stored),
+          error: `Cloudflare did not store fail mode ${describeFailOpen(desired)} in both environments`,
+        };
+      }
+    }
+    const values = await client.getPagesFailOpen(options.project);
+    const modes = describeBoth(values);
+    if (desired !== undefined && !both(values, desired)) {
+      return { exitCode: 1, modes, error: `Re-read did not confirm fail mode ${describeFailOpen(desired)}` };
+    }
+    if (expected !== undefined && !both(values, expected)) {
+      return {
+        exitCode: 2,
+        modes,
+        error: `expected ${describeFailOpen(expected)} in production and preview`,
+      };
+    }
+    return { exitCode: 0, modes };
+  } catch (err: any) {
+    return { exitCode: 1, error: err.message };
+  }
+}
+
+function describeBoth(values: FailOpenValues): { production: string; preview: string } {
+  return { production: describeFailOpen(values.production), preview: describeFailOpen(values.preview) };
+}
+
 export function buildPagesDeployArgs(options: PagesDeployOptions): string[] {
   const args = [
     "wrangler",
@@ -151,9 +227,19 @@ function printDeployments(deployments: PagesDeployment[], mode: OutputMode): voi
   }
 }
 
+export interface DeploymentsCommandDeps {
+  /** Build the client used by `fail-open`. Injected in tests. */
+  createFailOpenClient?: (opts: {
+    wranglerAuth: boolean;
+    globalApiKey: boolean;
+    email?: string;
+  }) => FailOpenClient;
+}
+
 export function registerDeploymentsCommand(
   program: Command,
   getOutputMode: () => OutputMode,
+  deps: DeploymentsCommandDeps = {},
 ): void {
   const deployments = program
     .command("deployments")
@@ -225,6 +311,53 @@ export function registerDeploymentsCommand(
         console.error(`Error: ${err.message}`);
         process.exit(1);
       }
+    });
+
+  deployments
+    .command("fail-open")
+    .description("Show or set a Pages project's Functions fail open / closed mode (production and preview)")
+    .requiredOption("--project <name>", "Pages project name")
+    .option("--set <mode>", "Set the mode for production and preview together: open or closed")
+    .option("--expect <mode>", "Exit with code 2 unless both environments are open or closed as given")
+    .option("--wrangler-auth", "Use the local Wrangler OAuth token", false)
+    .option("--global-api-key", "Use CLOUDFLARE_API_KEY with X-Auth headers", false)
+    .option("--email <email>", "Cloudflare account email for Global API Key auth")
+    .action(async (opts) => {
+      let client: FailOpenClient;
+      try {
+        client = deps.createFailOpenClient
+          ? deps.createFailOpenClient({
+              wranglerAuth: opts.wranglerAuth,
+              globalApiKey: opts.globalApiKey,
+              email: opts.email,
+            })
+          : new CfaClient(
+              loadConfig(undefined, {
+                requireAccountId: true,
+                wranglerAuth: opts.wranglerAuth,
+                globalApiKeyAuth: opts.globalApiKey,
+                email: opts.email,
+              }),
+            );
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
+        process.exitCode = 1;
+        return;
+      }
+      const result = await runFailOpen(client, {
+        project: opts.project,
+        set: opts.set,
+        expect: opts.expect,
+      });
+      if (result.modes) {
+        if (getOutputMode() === "json") {
+          console.log(JSON.stringify({ project: opts.project, ...result.modes }, null, 2));
+        } else {
+          console.log(`${opts.project}\tproduction=${result.modes.production}\tpreview=${result.modes.preview}`);
+        }
+      }
+      if (result.error) console.error(`Error: ${result.error}`);
+      process.exitCode = result.exitCode;
     });
 
   deployments
