@@ -148,7 +148,7 @@ describe("fail-open helpers", () => {
     expect(describeFailOpen(undefined)).toBe("unknown");
   });
 
-  it("registers fail-open with project, environment, set, expect and auth options", () => {
+  it("registers fail-open with project, set, expect and auth options", () => {
     const program = new Command();
     registerDeploymentsCommand(program, () => "human");
     const failOpen = program.commands
@@ -157,7 +157,6 @@ describe("fail-open helpers", () => {
     expect(failOpen).toBeDefined();
     expect(failOpen?.options.map((option) => option.long)).toEqual([
       "--project",
-      "--environment",
       "--set",
       "--expect",
       "--wrangler-auth",
@@ -166,3 +165,91 @@ describe("fail-open helpers", () => {
     ]);
   });
 });
+
+describe("runFailOpen", () => {
+  type Values = { production: boolean | undefined; preview: boolean | undefined };
+  const fakeClient = (read: Values | Error, stored?: Values | Error) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      async getPagesFailOpen() {
+        calls.push("get");
+        if (read instanceof Error) throw read;
+        return read;
+      },
+      async setPagesFailOpen(_project: string, failOpen: boolean) {
+        calls.push(`set:${failOpen}`);
+        if (stored instanceof Error) throw stored;
+        return stored ?? { production: failOpen, preview: failOpen };
+      },
+    };
+  };
+
+  it("passes --expect closed only when both environments are closed", async () => {
+    const { runFailOpen } = await import("../cli/commands/deployments.js");
+    const ok = await runFailOpen(fakeClient({ production: false, preview: false }), {
+      project: "p",
+      expect: "closed",
+    });
+    expect(ok.exitCode).toBe(0);
+    expect(ok.modes).toEqual({ production: "closed", preview: "closed" });
+
+    for (const values of [
+      { production: false, preview: true },
+      { production: true, preview: false },
+      { production: false, preview: undefined },
+      { production: undefined, preview: undefined },
+      { production: true, preview: true },
+    ]) {
+      const result = await runFailOpen(fakeClient(values), { project: "p", expect: "closed" });
+      expect(result.exitCode, JSON.stringify(values)).toBe(2);
+    }
+  });
+
+  it("reports without failing when no expectation is given", async () => {
+    const { runFailOpen } = await import("../cli/commands/deployments.js");
+    const result = await runFailOpen(fakeClient({ production: true, preview: undefined }), { project: "p" });
+    expect(result.exitCode).toBe(0);
+    expect(result.modes).toEqual({ production: "open", preview: "unknown" });
+  });
+
+  it("returns exit code 1 when the API read fails", async () => {
+    const { runFailOpen } = await import("../cli/commands/deployments.js");
+    const result = await runFailOpen(fakeClient(new Error("HTTP 403")), { project: "p", expect: "closed" });
+    expect(result.exitCode).toBe(1);
+    expect(result.error).toContain("HTTP 403");
+  });
+
+  it("sets both environments, then re-reads to confirm the stored mode", async () => {
+    const { runFailOpen } = await import("../cli/commands/deployments.js");
+    const client = fakeClient({ production: false, preview: false });
+    const result = await runFailOpen(client, { project: "p", set: "closed" });
+    expect(client.calls).toEqual(["set:false", "get"]);
+    expect(result.exitCode).toBe(0);
+    expect(result.modes).toEqual({ production: "closed", preview: "closed" });
+  });
+
+  it("fails with exit code 1 when the PATCH response or the re-read does not match", async () => {
+    const { runFailOpen } = await import("../cli/commands/deployments.js");
+    const cases: Array<[Values, Values]> = [
+      [{ production: false, preview: false }, { production: false, preview: true }],
+      [{ production: false, preview: false }, { production: undefined, preview: false }],
+      [{ production: true, preview: false }, { production: false, preview: false }],
+    ];
+    for (const [read, stored] of cases) {
+      const result = await runFailOpen(fakeClient(read, stored), { project: "p", set: "closed" });
+      expect(result.exitCode, JSON.stringify({ read, stored })).toBe(1);
+    }
+  });
+
+  it("rejects invalid modes before calling the API", async () => {
+    const { runFailOpen } = await import("../cli/commands/deployments.js");
+    const client = fakeClient({ production: false, preview: false });
+    for (const options of [{ project: "p", set: "false" }, { project: "p", expect: "true" }]) {
+      const result = await runFailOpen(client, options);
+      expect(result.exitCode).toBe(1);
+    }
+    expect(client.calls).toEqual([]);
+  });
+});
+
