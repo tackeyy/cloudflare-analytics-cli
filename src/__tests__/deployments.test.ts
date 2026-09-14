@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildPagesDeployArgs,
   buildPagesProjectCreateArgs,
@@ -250,6 +250,58 @@ describe("runFailOpen", () => {
       expect(result.exitCode).toBe(1);
     }
     expect(client.calls).toEqual([]);
+  });
+});
+
+describe("fail-open command action", () => {
+  const run = async (
+    args: string[],
+    values: { production: boolean | undefined; preview: boolean | undefined } | Error,
+  ) => {
+    const program = new Command();
+    program.exitOverride();
+    const logs: string[] = [];
+    const errors: string[] = [];
+    const log = vi.spyOn(console, "log").mockImplementation((line) => void logs.push(String(line)));
+    const error = vi.spyOn(console, "error").mockImplementation((line) => void errors.push(String(line)));
+    registerDeploymentsCommand(program, () => "human", {
+      createFailOpenClient: () => ({
+        async getPagesFailOpen() {
+          if (values instanceof Error) throw values;
+          return values;
+        },
+        async setPagesFailOpen(_project: string, failOpen: boolean) {
+          return { production: failOpen, preview: failOpen };
+        },
+      }),
+    });
+    const previous = process.exitCode;
+    process.exitCode = undefined;
+    try {
+      await program.parseAsync(["node", "cfa", "deployments", "fail-open", ...args]);
+      return { exitCode: process.exitCode, logs, errors };
+    } finally {
+      process.exitCode = previous;
+      log.mockRestore();
+      error.mockRestore();
+    }
+  };
+
+  it("sets process.exitCode to 2 when --expect does not match", async () => {
+    const result = await run(["--project", "p", "--expect", "closed"], { production: false, preview: true });
+    expect(result.exitCode).toBe(2);
+    expect(result.logs).toEqual(["p\tproduction=closed\tpreview=open"]);
+  });
+
+  it("sets process.exitCode to 0 when both environments match", async () => {
+    const result = await run(["--project", "p", "--expect", "closed"], { production: false, preview: false });
+    expect(result.exitCode).toBe(0);
+  });
+
+  it("sets process.exitCode to 1 on API errors", async () => {
+    const result = await run(["--project", "p", "--expect", "closed"], new Error("HTTP 403"));
+    expect(result.exitCode).toBe(1);
+    expect(result.errors.join("\n")).toContain("HTTP 403");
   });
 });
 

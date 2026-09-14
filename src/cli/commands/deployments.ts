@@ -227,9 +227,19 @@ function printDeployments(deployments: PagesDeployment[], mode: OutputMode): voi
   }
 }
 
+export interface DeploymentsCommandDeps {
+  /** Build the client used by `fail-open`. Injected in tests. */
+  createFailOpenClient?: (opts: {
+    wranglerAuth: boolean;
+    globalApiKey: boolean;
+    email?: string;
+  }) => FailOpenClient;
+}
+
 export function registerDeploymentsCommand(
   program: Command,
   getOutputMode: () => OutputMode,
+  deps: DeploymentsCommandDeps = {},
 ): void {
   const deployments = program
     .command("deployments")
@@ -315,14 +325,20 @@ export function registerDeploymentsCommand(
     .action(async (opts) => {
       let client: FailOpenClient;
       try {
-        client = new CfaClient(
-          loadConfig(undefined, {
-            requireAccountId: true,
-            wranglerAuth: opts.wranglerAuth,
-            globalApiKeyAuth: opts.globalApiKey,
-            email: opts.email,
-          }),
-        );
+        client = deps.createFailOpenClient
+          ? deps.createFailOpenClient({
+              wranglerAuth: opts.wranglerAuth,
+              globalApiKey: opts.globalApiKey,
+              email: opts.email,
+            })
+          : new CfaClient(
+              loadConfig(undefined, {
+                requireAccountId: true,
+                wranglerAuth: opts.wranglerAuth,
+                globalApiKeyAuth: opts.globalApiKey,
+                email: opts.email,
+              }),
+            );
       } catch (err: any) {
         console.error(`Error: ${err.message}`);
         process.exitCode = 1;
